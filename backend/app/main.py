@@ -7,16 +7,26 @@ Honest fallback: when no cluster is reachable the app says so (never silently pr
 from __future__ import annotations
 
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import cluster, incidents, k8s, llm, state
+from . import activity, autoscale, cluster, incidents, k8s, llm, pods, selfheal, state
 from .drift import detect_drift, detect_outliers, diff_configs
 
-app = FastAPI(title="Config Cop API", version="1.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # background self-heal watcher (disabled by default; enabled via /api/selfheal)
+    await selfheal.start()
+    yield
+    await selfheal.stop()
+
+
+app = FastAPI(title="Config Cop API", version="1.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,6 +49,16 @@ class InjectBody(BaseModel):
 class FixBody(BaseModel):
     workload: str
     proposedChanges: list[dict[str, Any]] | None = None
+
+
+class SelfHealBody(BaseModel):
+    enabled: bool
+    interval: int | None = Field(default=None, ge=3, le=300)
+
+
+class AutoScaleApplyBody(BaseModel):
+    workload: str
+    replicas: int = Field(ge=0, le=20)
 
 
 @app.exception_handler(cluster.ClusterUnavailable)
@@ -101,6 +121,8 @@ def status() -> dict[str, Any]:
         "rollouts": rollouts,
         "incidents": incidents.list_incidents(50),
         "incidentsOpen": [i for i in incidents.list_incidents(200) if i["status"] == "open"],
+        "activity": activity.recent(50),
+        "selfHeal": selfheal.status(),
     }
 
 
@@ -173,10 +195,32 @@ def scan() -> dict[str, Any]:
         "llmMode": _meta()["llm"]["mode"],
         "aiErrors": ai_errors,
     }
+    drifted_names = summary["drifted"]
+    activity.log(
+        "scan.complete",
+        (f"Scan found drift in {len(drifted_names)} workload(s): {', '.join(drifted_names)}"
+         if drifted_names else "Scan complete — all workloads match the approved baseline"),
+        level="warn" if drifted_names else "success",
+        details={"drifted": drifted_names, "outliers": summary["outliers"],
+                 "newIncidents": new_incidents},
+    )
+    for d in drift:
+        if d["drifted"]:
+            activity.log("drift.found",
+                         f"{d['workload']}: {d['diffCount']} field(s) differ from baseline — "
+                         f"{', '.join(x['path'] for x in d['diffs'])}",
+                         workload=d["workload"], level="warn",
+                         details={"diffs": d["diffs"]})
+    for err in ai_errors:
+        activity.log("ai.error",
+                     f"AI explanation failed for {err['workload']} ({err['error']}) — using the "
+                     "clearly-labelled rule-based explanation instead",
+                     workload=err["workload"], level="error")
     return {
         "summary": summary, "drift": drift, "outliers": outliers,
         "explanations": explanations, "matchedIncidents": matched,
         "workloads": cluster.workloads(), "incidents": incidents.list_incidents(50), "meta": _meta(),
+        "activity": activity.recent(50),
     }
 
 
@@ -184,9 +228,18 @@ def scan() -> dict[str, Any]:
 def introduce(body: InjectBody | None = None) -> dict[str, Any]:
     body = body or InjectBody()
     try:
-        return cluster.inject_drift(body.workload, body.count)
+        result = cluster.inject_drift(body.workload, body.count)
     except KeyError:
         raise HTTPException(404, f"workload {body.workload!r} not found in cluster/baseline")
+    names = [i["workload"] for i in result.get("injected", [])]
+    where = "REAL cluster (kubectl patch)" if result.get("clusterMode") == "live" else "SIMULATED"
+    activity.log("drift.inject",
+                 f"Drift injected into {', '.join(names) or 'no workload'} on the {where} — "
+                 f"cards will show DRIFTED until fixed",
+                 workload=names[0] if names else None, level="warn",
+                 details={"injected": result.get("injected", []), "mode": result.get("clusterMode")})
+    result["activity"] = activity.recent(50)
+    return result
 
 
 @app.post("/api/fix")
@@ -222,7 +275,38 @@ def fix(body: FixBody) -> dict[str, Any]:
     result["workloads"] = wls
     result["incidents"] = incidents.list_incidents(50)
     result["meta"] = _meta()
+    if result.get("verified"):
+        activity.log("fix.applied",
+                     f"Fix verified on {name}: reverted {', '.join(result.get('revertedFields', [])) or '—'} — "
+                     f"fingerprint {result.get('fingerprint')} matches baseline, incidents resolved",
+                     workload=name, level="success",
+                     details={"revertedFields": result.get("revertedFields", []),
+                              "resolvedIncidents": result.get("resolvedIncidents", [])})
+    else:
+        activity.log("fix.failed",
+                     f"Fix on {name} NOT verified — {len(result.get('remainingDifferences', []))} difference(s) remain",
+                     workload=name, level="error")
+    result["activity"] = activity.recent(50)
     return result
+
+
+@app.post("/api/fix/preview")
+def fix_preview(body: FixBody) -> dict[str, Any]:
+    """Server-computed proposed fix (path -> baseline value). Never applies anything."""
+    name = body.workload
+    baseline = cluster.baseline_dict()
+    if name not in baseline:
+        raise HTTPException(404, f"workload {name!r} not found")
+    current = cluster.configs().get(name) or {}
+    diffs = diff_configs(current, baseline[name])
+    return {
+        "workload": name,
+        "drifted": bool(diffs),
+        "diffCount": len(diffs),
+        "proposedChanges": [{"path": d["path"], "value": d["expected"]} for d in diffs],
+        "note": "Re-validated against the baseline on apply (HTTP 422 if it does not reproduce it exactly).",
+        "clusterMode": cluster.mode(),
+    }
 
 
 @app.get("/api/incidents")
@@ -243,6 +327,12 @@ def scale(body: ScaleBody) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(502, f"scale failed: {exc}")
     result["clusterMode"] = cluster.mode()
+    activity.log("scale.change",
+                 f"{body.workload} scaled {spec_replicas} → {body.replicas} replica(s) — "
+                 f"{'real kubectl rollout' if cluster.mode() == 'live' else 'SIMULATED rollout'}",
+                 workload=body.workload, level="info",
+                 details={"replicas": body.replicas, "mode": cluster.mode()})
+    result["activity"] = activity.recent(50)
     return result
 
 
@@ -259,7 +349,95 @@ def reset() -> dict[str, Any]:
     result = cluster.reset_demo()
     result["meta"] = _meta()
     result["workloads"] = cluster.workloads()
+    activity.log("demo.reset",
+                 ("Demo reset: pristine manifest re-applied to the real cluster and baseline re-captured"
+                  if result.get("clusterMode") == "live"
+                  else "Demo reset to the pristine baseline (SIMULATED)"),
+                 level="success")
+    result["activity"] = activity.recent(50)
     return result
+
+
+# ---------------------------------------------------------------- self-heal
+
+@app.get("/api/selfheal")
+def get_selfheal() -> dict[str, Any]:
+    return selfheal.status()
+
+
+@app.post("/api/selfheal")
+def set_selfheal(body: SelfHealBody) -> dict[str, Any]:
+    return selfheal.set_enabled(body.enabled, body.interval)
+
+
+@app.post("/api/selfheal/run")
+def run_selfheal() -> dict[str, Any]:
+    """Run one detect->fix pass right now (same code path as the background watcher)."""
+    try:
+        return selfheal.run_pass()
+    except cluster.ClusterUnavailable:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"self-heal pass failed: {exc}")
+
+
+# ---------------------------------------------------------------- pods + logs
+
+@app.get("/api/pods")
+def get_pods() -> dict[str, Any]:
+    try:
+        return pods.list_pods()
+    except Exception as exc:
+        raise HTTPException(502, f"could not list pods: {exc}")
+
+
+@app.post("/api/pods/{name}/delete")
+def delete_pod(name: str) -> dict[str, Any]:
+    try:
+        return pods.delete_pod(name)
+    except KeyError:
+        raise HTTPException(404, f"pod {name!r} not found")
+    except Exception as exc:
+        raise HTTPException(502, f"delete pod failed: {exc}")
+
+
+@app.get("/api/logs/{workload}")
+def logs(workload: str, tail: int = Query(default=100, ge=10, le=500)) -> dict[str, Any]:
+    configs = cluster.configs()
+    if workload not in configs:
+        raise HTTPException(404, f"workload {workload!r} not found")
+    try:
+        return pods.workload_logs(workload, tail)
+    except Exception as exc:
+        raise HTTPException(502, f"could not read logs: {exc}")
+
+
+# ---------------------------------------------------------------- activity + auto-scale
+
+@app.get("/api/activity")
+def get_activity(limit: int = Query(default=50, ge=1, le=200), workload: str | None = None) -> dict[str, Any]:
+    items = activity.recent(limit, workload)
+    return {"activity": items, "count": len(items)}
+
+
+@app.get("/api/autoscale")
+def get_autoscale() -> dict[str, Any]:
+    try:
+        return autoscale.recommendations()
+    except cluster.ClusterUnavailable:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"auto-scale analysis failed: {exc}")
+
+
+@app.post("/api/autoscale/apply")
+def apply_autoscale(body: AutoScaleApplyBody) -> dict[str, Any]:
+    try:
+        return autoscale.apply(body.workload, body.replicas)
+    except KeyError:
+        raise HTTPException(404, f"workload {body.workload!r} not found")
+    except Exception as exc:
+        raise HTTPException(502, f"auto-scale apply failed: {exc}")
 
 
 def _apply_paths(config: dict[str, Any], changes: list[dict[str, Any]]) -> dict[str, Any]:

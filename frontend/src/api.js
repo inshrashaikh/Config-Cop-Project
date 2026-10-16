@@ -38,4 +38,9 @@ export const api = {
   selfHealRun: () => req('/api/selfheal/run', { method: 'POST' }),
   pods: () => req('/api/pods'),
   deletePod: (name) => req(`/api/pods/${encodeURIComponent(name)}/delete`, { method: 'POST' }),
+  activity: (limit = 50) => req(`/api/activity?limit=${limit}`),
+  logs: (workload, tail = 100) => req(`/api/logs/${encodeURIComponent(workload)}?tail=${tail}`),
+  autoscale: () => req('/api/autoscale'),
+  autoscaleApply: (workload, replicas) =>
+    req('/api/autoscale/apply', { method: 'POST', body: JSON.stringify({ workload, replicas }) }),
 }

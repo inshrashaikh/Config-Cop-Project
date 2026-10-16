@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
+import * as sound from './sound.js'
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -62,6 +63,13 @@ function Panel({ title, subtitle, children, className = '', right }) {
 
 const fmt = (v) => (typeof v === 'object' ? JSON.stringify(v) : String(v))
 
+/* colour maps for the explainable / activity layers */
+const SEVERITY_TONE = { critical: 'rose', high: 'rose', medium: 'amber', low: 'slate' }
+const LEVEL_TONE = { info: 'slate', warn: 'amber', error: 'rose', success: 'emerald' }
+const LEVEL_DOT = {
+  info: 'bg-slate-500', warn: 'bg-amber-400', error: 'bg-rose-400', success: 'bg-emerald-400',
+}
+
 /* ------------------------------------------------------------------ app */
 
 export default function App() {
@@ -79,6 +87,12 @@ export default function App() {
   const [pods, setPods] = useState([])
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [preview, setPreview] = useState({})
+  const [activity, setActivity] = useState([])
+  const [autoscale, setAutoscale] = useState(null)
+  const [soundOn, setSoundOn] = useState(sound.isSoundEnabled())
+  const [logs, setLogs] = useState(null)
+  const [logsBusy, setLogsBusy] = useState(false)
+  const lastHealSeq = useRef(0)
 
   const showToast = useCallback((msg, tone = 'ok') => {
     setToast({ msg, tone })
@@ -113,14 +127,41 @@ export default function App() {
     try { setPods((await api.pods()).pods || []) } catch { /* keep last */ }
   }, [])
 
-  useEffect(() => { loadSelfHeal(); loadPods() }, [loadSelfHeal, loadPods])
+  const loadActivity = useCallback(async () => {
+    try { setActivity((await api.activity(80)).activity || []) } catch { /* keep last */ }
+  }, [])
 
-  // live auto-refresh: poll status/pods/self-heal so recovery is visible without clicking
+  const loadAutoscale = useCallback(async () => {
+    try { setAutoscale(await api.autoscale()) } catch { /* keep last */ }
+  }, [])
+
+  const loadAll = useCallback(async () => {
+    await Promise.all([loadStatus(), loadPods(), loadSelfHeal(), loadActivity()])
+  }, [loadStatus, loadPods, loadSelfHeal, loadActivity])
+
+  useEffect(() => { loadSelfHeal(); loadPods(); loadActivity() }, [loadSelfHeal, loadPods, loadActivity])
+
+  // live auto-refresh: poll status/pods/self-heal/activity so recovery is visible without clicking
   useEffect(() => {
     if (!autoRefresh) return undefined
-    const id = setInterval(() => { loadStatus(); loadPods(); loadSelfHeal() }, 5000)
+    const id = setInterval(() => { loadAll(); loadAutoscale() }, 5000)
     return () => clearInterval(id)
-  }, [autoRefresh, loadStatus, loadPods, loadSelfHeal])
+  }, [autoRefresh, loadAll, loadAutoscale])
+
+  // play a sound when a NEW self-heal event appears in the live activity feed
+  useEffect(() => {
+    const healEvents = activity.filter((e) => e.kind === 'heal.fixed' || e.kind === 'heal.failed')
+    if (!healEvents.length) return
+    const newest = healEvents[0]
+    if (newest.seq > lastHealSeq.current) {
+      if (lastHealSeq.current !== 0) {
+        if (newest.kind === 'heal.fixed') sound.success()
+        else sound.errorBuzz()
+        showToast(newest.message, newest.kind === 'heal.fixed' ? 'ok' : 'err')
+      }
+      lastHealSeq.current = newest.seq
+    }
+  }, [activity, showToast])
 
   const workloads = status?.workloads || []
   const rollouts = useMemo(
@@ -162,6 +203,7 @@ export default function App() {
       }
       return res
     } catch (e) {
+      sound.errorBuzz()
       showToast(e.message, 'err')
       return null
     } finally {
@@ -170,15 +212,23 @@ export default function App() {
   }
 
   const handleScan = () =>
-    run('scan', api.scan, (r) =>
-      r.summary.drifted.length
-        ? `Scan complete — drift in ${r.summary.drifted.length} workload(s): ${r.summary.drifted.join(', ')}`
-        : 'Scan complete — no drift, everything matches baseline')
+    run('scan', api.scan, (r) => {
+      const n = r.summary.drifted.length
+      loadActivity()
+      loadAutoscale()
+      if (n) { sound.alarm() } else { sound.blip() }
+      return n
+        ? `Scan complete — drift in ${n} workload(s): ${r.summary.drifted.join(', ')}`
+        : 'Scan complete — no drift, everything matches baseline'
+    })
 
   const handleInject = () =>
     run('inject', () => api.inject({}), async (r) => {
       const s = await loadStatus()
       if (s) setScan(null) // stale scan would mislead the demo
+      loadActivity()
+      loadAutoscale()
+      sound.alarm()
       const names = (r.injected || []).map((i) => i.workload).join(', ')
       const where = r.clusterMode === 'live' ? 'REAL cluster (kubectl patch)' : 'SIMULATED'
       if (r.errors?.length) return `Injected into ${names} on ${where}; ${r.errors.length} failed: ${r.errors[0].error}`
@@ -195,7 +245,10 @@ export default function App() {
         setScan(s)
       } catch { /* fix already verified server-side */ }
       finally { setBusy(null) }
-      await loadStatus()
+      await loadAll()
+      loadAutoscale()
+      if (r.verified) sound.success()
+      else sound.errorBuzz()
       showToast(r.verified
         ? `${name} restored — fingerprint ${r.fingerprint} == baseline, re-scan clean`
         : `${name} fix verification FAILED`, r.verified ? 'ok' : 'err')
@@ -204,13 +257,38 @@ export default function App() {
 
   const handleScale = (name, delta) =>
     run(`scale:${name}`, () => api.scale(name, Math.max(0, (rollouts[name]?.desiredReplicas ?? 1) + delta)),
-      (r) => `${r.workload} scaled to ${r.replicas} replica(s) — ${r.clusterMode === 'live' ? 'real kubectl rollout' : 'SIMULATED rollout started'}`)
+      (r) => {
+        sound.blip()
+        loadActivity()
+        loadAutoscale()
+        return `${r.workload} scaled to ${r.replicas} replica(s) — ${r.clusterMode === 'live' ? 'real kubectl rollout' : 'SIMULATED rollout started'}`
+      })
+
+  const handleApplyScale = (rec) =>
+    run(`autoscale:${rec.workload}`, () => api.autoscaleApply(rec.workload, rec.suggestedReplicas),
+      (r) => {
+        sound.success()
+        loadActivity()
+        loadAutoscale()
+        loadStatus()
+        return `Auto-scale → ${r.workload} set to ${r.replicas} replica(s) — ${r.clusterMode === 'live' ? 'real kubectl rollout' : 'SIMULATED'}`
+      })
+
+  const handleLoadLogs = (name) =>
+    run(`logs:${name}`, async () => {
+      const r = await api.logs(name)
+      setLogs(r)
+      return r
+    }, null)
 
   const handleReset = () =>
-    run('reset', async () => { const r = await api.reset(); setScan(null); setFixResults({}); await loadStatus(); return r },
-      (r) => r.clusterMode === 'live'
-        ? 'Re-applied k8s/demo-workloads.yaml to the real cluster; baseline re-captured'
-        : 'Demo state reset to pristine baseline (simulated)')
+    run('reset', async () => { const r = await api.reset(); setScan(null); setFixResults({}); await loadAll(); return r },
+      (r) => {
+        sound.blip()
+        return r.clusterMode === 'live'
+          ? 'Re-applied k8s/demo-workloads.yaml to the real cluster; baseline re-captured'
+          : 'Demo state reset to pristine baseline (simulated)'
+      })
 
   const handleTestAi = () =>
     run('ai', async () => { const r = await api.llmTest(); await loadAiStatus(false); return r },
@@ -224,6 +302,8 @@ export default function App() {
     run('selfheal', async () => {
       const r = await api.setSelfHeal(!(selfHeal?.enabled), selfHeal?.interval)
       setSelfHeal(r)
+      loadActivity()
+      if (r.enabled) sound.blip()
       return r
     }, (r) => `Self-healing ${r.enabled ? 'ENABLED' : 'DISABLED'} — ${r.mode}`)
 
@@ -231,7 +311,11 @@ export default function App() {
     run('healnow', async () => {
       const r = await api.selfHealRun()
       setSelfHeal(r.status)
-      await loadStatus(); loadPods()
+      await loadAll()
+      loadAutoscale()
+      if (r.healed?.length) sound.success()
+      else if (r.error || r.failed?.length) sound.errorBuzz()
+      else sound.blip()
       return r
     }, (r) => (r.healed?.length
       ? `Self-heal restored ${r.healed.length} workload(s): ${r.healed.join(', ')}`
@@ -240,7 +324,8 @@ export default function App() {
   const handleKillPod = (pod) =>
     run(`pod:${pod}`, async () => {
       const r = await api.deletePod(pod)
-      setTimeout(() => { loadPods(); loadStatus() }, 1500)
+      sound.alarm()
+      setTimeout(() => { loadPods(); loadStatus(); loadActivity() }, 1500)
       return r
     }, (r) => `Deleted pod ${r.deletedPod} — ReplicaSet is recreating it (Kubernetes self-healing)`)
 
@@ -260,11 +345,20 @@ export default function App() {
       setBusy('scan')
       try { setScan(await api.scan()) } catch { /* verified server-side */ }
       finally { setBusy(null) }
-      await loadStatus()
+      await loadAll()
+      loadAutoscale()
+      if (r.verified) sound.success()
+      else sound.errorBuzz()
       showToast(r.verified ? `${name} fix validated against baseline & verified` : `${name} fix verification FAILED`,
         r.verified ? 'ok' : 'err')
       return null
     })
+
+  const handleToggleSound = () => {
+    const next = !soundOn
+    sound.setSoundEnabled(next)
+    setSoundOn(next)
+  }
 
   const meta = scan?.meta || status?.meta
   const llm = meta?.llm
@@ -311,6 +405,14 @@ export default function App() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleToggleSound}
+            className={cx('inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition',
+              soundOn ? 'border-sky-500/40 bg-sky-500/10 text-sky-300' : 'border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700')}
+            title="Alert sounds on drift / fix / self-heal events"
+          >
+            {soundOn ? '🔔 Sound ON' : '🔕 Sound off'}
+          </button>
           <button
             onClick={() => setAutoRefresh((v) => !v)}
             className={cx('inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition',
@@ -439,6 +541,13 @@ export default function App() {
                   </Button>
                   <Button
                     tone="ghost"
+                    busy={busy === `logs:${selectedWl.name}`}
+                    onClick={() => handleLoadLogs(selectedWl.name)}
+                  >
+                    📜 Logs
+                  </Button>
+                  <Button
+                    tone="ghost"
                     busy={busy === `preview:${selectedWl.name}`}
                     disabled={!selectedDrift?.drifted}
                     onClick={() => handlePreviewFix(selectedWl.name)}
@@ -473,6 +582,14 @@ export default function App() {
                 <>
                   <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
                     <Badge tone="rose">{selectedDrift.diffCount} field(s) drifted</Badge>
+                    {selectedExplanation?.severity && (
+                      <Badge tone={SEVERITY_TONE[selectedExplanation.severity] || 'slate'}>
+                        severity: {selectedExplanation.severity}
+                      </Badge>
+                    )}
+                    {typeof selectedExplanation?.confidence === 'number' && (
+                      <Badge tone="slate">confidence: {Math.round(selectedExplanation.confidence * 100)}%</Badge>
+                    )}
                     <Badge tone="slate">fingerprint <span className="mono">{selectedDrift.fingerprint}</span></Badge>
                     <Badge tone="slate">baseline <span className="mono">{selectedDrift.baselineFingerprint}</span></Badge>
                     {selectedOutlier && (
@@ -506,6 +623,30 @@ export default function App() {
                     </table>
                   </div>
 
+                  {/* explainable per-field walkthrough — what each drift means */}
+                  {(selectedExplanation?.fieldBriefs || []).length > 0 && (
+                    <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-300">
+                        🔎 Explainable AI — what each drifted field actually means
+                      </div>
+                      <ul className="space-y-2">
+                        {selectedExplanation.fieldBriefs.map((b) => (
+                          <li key={b.path} className="rounded-md border border-slate-800 bg-slate-950/50 px-2.5 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="mono text-[11px] text-slate-300">{b.path}</span>
+                              <Badge tone={SEVERITY_TONE[b.severity] || 'slate'}>{b.severity}</Badge>
+                              <span className="text-[11px] text-slate-400">{b.what}</span>
+                            </div>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-300">{b.why}</p>
+                            {b.impact && (
+                              <p className="mt-0.5 text-[11px] text-rose-300">Impact: {b.impact}</p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {/* AI explanation */}
                   {(() => {
                     const fromAi = !!selectedExplanation?.source?.startsWith('ai:')
@@ -533,6 +674,12 @@ export default function App() {
                           </div>
                         )}
                         <p className="text-sm leading-relaxed text-slate-200">{selectedExplanation?.explanation}</p>
+                        {selectedExplanation?.whatHappened && (
+                          <p className="mt-1.5 rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5 text-xs text-slate-300">
+                            <span className="font-semibold text-slate-200">What happened: </span>
+                            {selectedExplanation.whatHappened}
+                          </p>
+                        )}
                         <dl className="mt-2 grid gap-1.5 text-xs sm:grid-cols-3">
                           <MiniKV k="Likely cause" v={selectedExplanation?.likelyCause} />
                           <MiniKV k="Risk" v={selectedExplanation?.risk} />
@@ -652,6 +799,37 @@ export default function App() {
                 )
               })()}
 
+              {/* container logs for this workload — with plain-language analysis */}
+              {logs && logs.workload === selectedWl.name && (
+                <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950/60 p-3">
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                      📜 Container logs — {logs.workload}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Badge tone={logs.live ? 'emerald' : 'amber'}>{logs.live ? 'live kubectl logs' : 'SIMULATED'}</Badge>
+                      <button
+                        onClick={() => setLogs(null)}
+                        className="text-[11px] text-slate-400 underline hover:text-slate-200"
+                      >
+                        close
+                      </button>
+                    </div>
+                  </div>
+                  {logs.analysis?.summary && (
+                    <p className="mb-2 rounded border border-sky-500/30 bg-sky-500/5 px-2 py-1.5 text-xs text-sky-200">
+                      <span className="font-semibold">What these logs mean: </span>{logs.analysis.summary}
+                    </p>
+                  )}
+                  <pre className="mono max-h-64 overflow-auto rounded-lg border border-slate-800 bg-black/60 p-2.5 text-[11px] leading-relaxed text-slate-300">
+                    {(logs.lines || []).join('\n') || 'no output'}
+                  </pre>
+                  <p className="mt-1.5 text-[10px] text-slate-500">
+                    Source: {logs.source} · {logs.count} line(s) · read at {logs.at}
+                  </p>
+                </div>
+              )}
+
               {showConfig && (
                 <pre className="mono mt-3 max-h-72 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-3 text-[11px] text-slate-400">
                   {JSON.stringify(selectedWl.config, null, 2)}
@@ -714,6 +892,85 @@ export default function App() {
                   </li>
                 ))}
               </ul>
+            )}
+          </Panel>
+
+          <Panel
+            title="Live Activity"
+            subtitle="plain-language timeline of everything the app did — refresh every 5s with Live refresh"
+            right={<Badge tone="sky">{activity.length}</Badge>}
+          >
+            {!activity.length ? (
+              <p className="text-sm text-slate-400">No activity yet. Inject drift, scan, or enable self-heal.</p>
+            ) : (
+              <ul className="max-h-72 space-y-1.5 overflow-auto">
+                {activity.slice(0, 40).map((e) => (
+                  <li key={e.seq} className="rounded-md border border-slate-800 bg-slate-950/50 px-2 py-1.5 text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', LEVEL_DOT[e.level] || 'bg-slate-500')} />
+                      <span className="text-slate-500">{e.at?.slice(11, 19)}Z</span>
+                      <Badge tone={LEVEL_TONE[e.level] || 'slate'}>{e.kind}</Badge>
+                    </div>
+                    <p className="mt-0.5 leading-snug text-slate-300">{e.message}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel
+            title="Auto-Scale (rule-based)"
+            subtitle="explainable scaling suggestions — every rule that fired is shown"
+            right={<Badge tone="violet">{autoscale ? autoscale.toApply.length : '—'} to apply</Badge>}
+          >
+            {!autoscale ? (
+              <div className="flex items-center gap-2">
+                <Button tone="ghost" busy={busy === 'autoscale:load'} onClick={() => run('autoscale:load', loadAutoscale, null)}>
+                  Analyze workloads
+                </Button>
+                <span className="text-[11px] text-slate-500">rule-based · no black box</span>
+              </div>
+            ) : (
+              <>
+                <ul className="space-y-2">
+                  {autoscale.recommendations.map((rec) => (
+                    <li key={rec.workload} className="rounded-lg border border-slate-800 bg-slate-950/50 px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-medium text-slate-200">{rec.workload}</span>
+                        {rec.action === 'none'
+                          ? <Badge tone="emerald">no change</Badge>
+                          : <Badge tone={rec.action === 'up' ? 'sky' : 'amber'}>
+                              {rec.action} {rec.currentReplicas} → {rec.suggestedReplicas}
+                            </Badge>}
+                      </div>
+                      {rec.rules.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5">
+                          {rec.rules.map((rule, i) => (
+                            <li key={i} className="text-[10px] text-slate-400">
+                              <span className="text-slate-500">[{rule.id}]</span> {rule.why}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-0.5 text-[10px] text-slate-500">no rule fired — replicas match baseline &amp; all pods available</p>
+                      )}
+                      {rec.action !== 'none' && (
+                        <div className="mt-1.5">
+                          <Button
+                            tone="primary"
+                            className="!px-2.5 !py-1 !text-[11px]"
+                            busy={busy === `autoscale:${rec.workload}`}
+                            onClick={() => handleApplyScale(rec)}
+                          >
+                            Apply {rec.suggestedReplicas} replica(s)
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[10px] text-slate-500">{autoscale.note}</p>
+              </>
             )}
           </Panel>
 
@@ -849,10 +1106,13 @@ export default function App() {
             <ol className="list-inside list-decimal space-y-1 text-xs text-slate-400">
               <li>Live Deployments read via kubectl; configs fingerprinted (SHA-256 of canonical JSON) vs baseline.</li>
               <li>Exact field diff = expected vs actual; IsolationForest flags outliers.</li>
-              <li>Explanations from a real OpenAI-compatible LLM; clearly-labelled rule-based fallback on failure.</li>
+              <li>Explainable AI: per-field "what changed / why it matters / impact", severity + confidence, from a real LLM or the labelled rule-based fallback.</li>
+              <li>Alert sounds on drift injection, scan results, fixes and self-heal events (toggle in the header).</li>
               <li>Incidents in SQLite; similar past incidents matched via TF-IDF cosine.</li>
               <li>Fix patches the real Deployment back to baseline, re-reads it and re-scans to verify.</li>
               <li>Self-healing watcher auto-detects drift and restores the baseline on an interval; k8s also heals pods natively (probes + ReplicaSet recreation).</li>
+              <li>Auto-scale suggests replica changes with the exact rule shown; applying uses real kubectl scale.</li>
+              <li>Live Activity timeline + container logs with plain-language analysis explain everything as it happens.</li>
             </ol>
           </Panel>
         </div>
