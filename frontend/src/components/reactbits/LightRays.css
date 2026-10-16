@@ -1,0 +1,14 @@
+/* LightRays.css — Canvas-based volumetric light rays */
+.light-rays-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+.light-rays-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0.55;
+}

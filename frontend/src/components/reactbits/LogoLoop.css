@@ -1,0 +1,76 @@
+/* LogoLoop.css */
+.logo-loop-root {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  height: var(--logo-loop-height, 56px);
+}
+
+/* Edge fade masks */
+.logo-loop-root::before,
+.logo-loop-root::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  z-index: 2;
+  pointer-events: none;
+}
+.logo-loop-root::before {
+  left: 0;
+  background: linear-gradient(to right, var(--logo-loop-bg, #FAF9F4), transparent);
+}
+.logo-loop-root::after {
+  right: 0;
+  background: linear-gradient(to left, var(--logo-loop-bg, #FAF9F4), transparent);
+}
+
+.logo-loop-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  animation: logo-loop-scroll var(--logo-loop-duration, 28s) linear infinite;
+  animation-direction: var(--logo-loop-direction, normal);
+  will-change: transform;
+}
+
+.logo-loop-root:hover .logo-loop-track {
+  animation-duration: var(--logo-loop-hover-duration, 60s);
+}
+
+@keyframes logo-loop-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.logo-loop-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--logo-loop-gap, 32px);
+  flex-shrink: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 0.65;
+}
+
+.logo-loop-item:hover {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.logo-loop-item svg,
+.logo-loop-item img {
+  width: auto;
+  height: var(--logo-loop-icon-height, 28px);
+  display: block;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .logo-loop-track {
+    animation-play-state: paused;
+  }
+}

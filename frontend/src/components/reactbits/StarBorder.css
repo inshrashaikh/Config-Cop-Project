@@ -1,0 +1,63 @@
+/* StarBorder.css */
+.star-border-container {
+  display: inline-block;
+  position: relative;
+  border-radius: inherit;
+}
+
+.star-border-inner {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@property --star-border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0turn;
+}
+
+.star-border-track {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.star-border-gradient {
+  position: absolute;
+  inset: -100%;
+  animation: star-border-rotate var(--star-border-speed, 5s) linear infinite;
+  background: conic-gradient(
+    from var(--star-border-angle),
+    transparent 0%,
+    var(--star-border-color, #537B60) 8%,
+    transparent 16%,
+    transparent 100%
+  );
+}
+
+@keyframes star-border-rotate {
+  to { --star-border-angle: 1turn; }
+}
+
+/* Light theme overrides */
+.star-border-container[data-theme="light"] .star-border-gradient {
+  opacity: 0.75;
+}
+
+/* Pause on hover */
+.star-border-container:hover .star-border-gradient {
+  animation-play-state: paused;
+}
+
+.star-border-surface {
+  position: absolute;
+  inset: 1.5px;
+  border-radius: inherit;
+  z-index: 1;
+}

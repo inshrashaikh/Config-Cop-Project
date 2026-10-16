@@ -1,0 +1,72 @@
+/* DashboardLayout.css */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 49, 41, 0.25);
+  backdrop-filter: blur(2px);
+  z-index: 99;
+  animation: fadeIn 0.2s ease;
+}
+
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mobile-menu-btn:hover { background: var(--honeydew); color: var(--forest); }
+
+@media (max-width: 1024px) {
+  .mobile-menu-btn { display: flex; align-items: center; }
+}
+
+/* Sidebar cluster info */
+.sidebar-cluster-info {
+  background: var(--cream);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sidebar-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.sidebar-status-row span:first-of-type { flex: 1; }
+
+.sidebar-mode-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.sidebar-mode-badge.live        { background: var(--success-bg); color: var(--success); }
+.sidebar-mode-badge.simulated   { background: var(--warning-bg); color: var(--warning); }
+.sidebar-mode-badge.unavailable { background: var(--danger-bg);  color: var(--danger); }
+
+/* Top bar cluster badge */
+.top-bar-cluster-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+}
+.top-bar-cluster-badge.live        { background: var(--success-bg); color: var(--success); border-color: var(--success-border); }
+.top-bar-cluster-badge.simulated   { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-border); }
+.top-bar-cluster-badge.unavailable { background: var(--danger-bg);  color: var(--danger);  border-color: var(--danger-border); }

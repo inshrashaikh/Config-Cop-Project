@@ -1,0 +1,262 @@
+/* InfrastructureDiagram.css — Interactive light-glassmorphic architecture flow */
+
+.infra-diagram-root {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(184, 212, 187, 0.6);
+  box-shadow: 0 16px 40px rgba(36, 76, 58, 0.08), 0 2px 6px rgba(36, 76, 58, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  overflow: hidden;
+  padding: 24px;
+}
+
+/* Header bar inside diagram */
+.infra-diagram-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(212, 230, 213, 0.7);
+  margin-bottom: 20px;
+}
+
+.infra-diagram-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--forest);
+  letter-spacing: -0.01em;
+}
+
+.infra-diagram-title-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--honeydew);
+  color: var(--forest-mid);
+  border: 1px solid var(--sage-mid);
+}
+
+.infra-diagram-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.infra-diagram-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(184, 212, 187, 0.6);
+}
+
+/* Pipeline Flow Rows */
+.infra-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+/* Flow connector lines */
+.infra-flow-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 20px;
+  color: var(--forest-mid);
+  opacity: 0.6;
+}
+
+.infra-flow-line {
+  flex: 1;
+  height: 1px;
+  background: dashed 1px var(--sage-deep);
+  border-top: 1px dashed var(--sage-deep);
+}
+
+.infra-flow-pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--forest);
+  background: var(--cream);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--sage-mid);
+}
+
+.infra-card {
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(212, 230, 213, 0.8);
+  box-shadow: 0 2px 8px rgba(36, 76, 58, 0.04);
+  padding: 14px 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.infra-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(36, 76, 58, 0.08);
+}
+
+.infra-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.infra-card-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--forest);
+}
+
+.infra-card-tag {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--cream);
+  border: 1px solid var(--sage);
+  color: var(--text-secondary);
+}
+
+/* 2-Column Split for Baseline vs Live */
+.infra-split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 540px) {
+  .infra-split-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.infra-subcard {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: #FFFFFF;
+  border: 1px solid var(--sage);
+}
+
+.infra-subcard.baseline {
+  border-left: 3px solid var(--success);
+  background: rgba(223, 250, 236, 0.15);
+}
+
+.infra-subcard.live-drifted {
+  border-left: 3px solid var(--danger);
+  background: rgba(253, 234, 234, 0.2);
+}
+
+.infra-subcard-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.infra-diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.infra-diff-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: rgba(244, 242, 233, 0.6);
+}
+
+.infra-diff-row.drift-highlight {
+  background: rgba(253, 234, 234, 0.6);
+  border: 1px solid var(--danger-border);
+}
+
+.infra-diff-key {
+  color: var(--text-secondary);
+}
+
+.infra-diff-val-ok {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.infra-diff-val-err {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Analysis Card */
+.infra-analysis-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: #FFFFFF;
+  border: 1px solid rgba(212, 230, 213, 0.9);
+}
+
+.infra-analysis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.infra-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: var(--honeydew);
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--sage-mid);
+}
+
+.infra-ai-text {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.infra-diagram-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(212, 230, 213, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}

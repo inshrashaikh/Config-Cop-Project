@@ -1,0 +1,109 @@
+/* CallChip.css — Operation status chip with fill-wipe animation */
+.call-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid;
+  cursor: default;
+  user-select: none;
+  min-width: 160px;
+  transition: border-color 0.25s ease, color 0.25s ease;
+}
+
+/* --- Idle state --- */
+.call-chip.idle {
+  background: #FFFFFF;
+  color: #69766D;
+  border-color: #D4E6D5;
+}
+
+/* --- Running state: amber progress fill --- */
+.call-chip.running {
+  background: #FFFFFF;
+  color: #926C10;
+  border-color: #F5D87A;
+}
+
+/* --- Done state: green --- */
+.call-chip.done {
+  background: #DFFAEC;
+  color: #1F7A4D;
+  border-color: #A3E4BF;
+}
+
+/* --- Error state: red --- */
+.call-chip.error {
+  background: #FDEAEA;
+  color: #B0292A;
+  border-color: #F3AAAA;
+  animation: chip-shake 0.45s ease-in-out;
+}
+
+@keyframes chip-shake {
+  0%,100% { transform: translateX(0); }
+  20%,60% { transform: translateX(-4px); }
+  40%,80% { transform: translateX(4px); }
+}
+
+/* Fill wipe layer (behind content) */
+.call-chip-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  z-index: 0;
+  transition: width linear, background-color 0.3s ease;
+  border-radius: inherit;
+}
+.call-chip.running .call-chip-fill {
+  background: rgba(245,216,122,0.25);
+  width: var(--chip-fill-pct, 0%);
+}
+.call-chip.done .call-chip-fill {
+  background: rgba(163,228,191,0.4);
+  width: 100%;
+  transition: width 0.4s ease, background-color 0.3s ease;
+}
+.call-chip.error .call-chip-fill {
+  background: rgba(243,170,170,0.4);
+  width: 100%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Content sits above fill */
+.call-chip-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.call-chip-icon { flex-shrink: 0; }
+
+.chip-spinner {
+  width: 12px; height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.call-chip-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call-chip-timer { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; opacity: 0.75; font-size: 11px; white-space: nowrap; }
+
+/* Retry button */
+.chip-retry {
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; font-weight: 700; color: inherit; padding: 0 2px;
+  opacity: 0.75; transition: opacity 0.15s;
+}
+.chip-retry:hover { opacity: 1; }

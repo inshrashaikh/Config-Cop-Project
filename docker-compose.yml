@@ -4,7 +4,8 @@ services:
     build: ./backend
     container_name: config-cop-backend
     ports:
-      # host 8001 -> container 8000 (8000 is left free for the local dev backend)
+      # host 8000 & 8001 -> container 8000
+      - "8000:8000"
       - "8001:8000"
     environment:
       # AI provider is optional. Leave LLM_PROVIDER=none for the rule-based fallback.
