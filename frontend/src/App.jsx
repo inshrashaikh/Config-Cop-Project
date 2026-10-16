@@ -75,6 +75,10 @@ export default function App() {
   const [showConfig, setShowConfig] = useState(false)
   const [aiStatus, setAiStatus] = useState(null)
   const [aiTesting, setAiTesting] = useState(false)
+  const [selfHeal, setSelfHeal] = useState(null)
+  const [pods, setPods] = useState([])
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [preview, setPreview] = useState({})
 
   const showToast = useCallback((msg, tone = 'ok') => {
     setToast({ msg, tone })
@@ -100,6 +104,23 @@ export default function App() {
   }, [])
 
   useEffect(() => { loadAiStatus(true) }, [loadAiStatus])
+
+  const loadSelfHeal = useCallback(async () => {
+    try { setSelfHeal(await api.selfHeal()) } catch { /* keep last */ }
+  }, [])
+
+  const loadPods = useCallback(async () => {
+    try { setPods((await api.pods()).pods || []) } catch { /* keep last */ }
+  }, [])
+
+  useEffect(() => { loadSelfHeal(); loadPods() }, [loadSelfHeal, loadPods])
+
+  // live auto-refresh: poll status/pods/self-heal so recovery is visible without clicking
+  useEffect(() => {
+    if (!autoRefresh) return undefined
+    const id = setInterval(() => { loadStatus(); loadPods(); loadSelfHeal() }, 5000)
+    return () => clearInterval(id)
+  }, [autoRefresh, loadStatus, loadPods, loadSelfHeal])
 
   const workloads = status?.workloads || []
   const rollouts = useMemo(
@@ -199,6 +220,52 @@ export default function App() {
     run('baseline', async () => { const r = await api.captureBaseline(); await loadStatus(); return r },
       (r) => `Baseline captured: ${r.captured.join(', ')}`)
 
+  const handleSelfHealToggle = () =>
+    run('selfheal', async () => {
+      const r = await api.setSelfHeal(!(selfHeal?.enabled), selfHeal?.interval)
+      setSelfHeal(r)
+      return r
+    }, (r) => `Self-healing ${r.enabled ? 'ENABLED' : 'DISABLED'} — ${r.mode}`)
+
+  const handleHealNow = () =>
+    run('healnow', async () => {
+      const r = await api.selfHealRun()
+      setSelfHeal(r.status)
+      await loadStatus(); loadPods()
+      return r
+    }, (r) => (r.healed?.length
+      ? `Self-heal restored ${r.healed.length} workload(s): ${r.healed.join(', ')}`
+      : (r.error ? `Self-heal error: ${r.error}` : 'Self-heal ran — no drift to fix')))
+
+  const handleKillPod = (pod) =>
+    run(`pod:${pod}`, async () => {
+      const r = await api.deletePod(pod)
+      setTimeout(() => { loadPods(); loadStatus() }, 1500)
+      return r
+    }, (r) => `Deleted pod ${r.deletedPod} — ReplicaSet is recreating it (Kubernetes self-healing)`)
+
+  const handlePreviewFix = (name) =>
+    run(`preview:${name}`, async () => {
+      const r = await api.fixPreview(name)
+      setPreview((prev) => ({ ...prev, [name]: r }))
+      return r
+    }, (r) => (r.drifted ? `${r.diffCount} proposed change(s) → review, then apply (server-validated)` : 'No drift to fix'))
+
+  const handleApplyFix = (name) =>
+    run(`fix:${name}`, async () => {
+      const p = preview?.[name] || (await api.fixPreview(name))
+      const r = await api.fix(name, p.proposedChanges) // server re-validates against baseline (422 if wrong)
+      setFixResults((prev) => ({ ...prev, [name]: r }))
+      setPreview((prev) => ({ ...prev, [name]: null }))
+      setBusy('scan')
+      try { setScan(await api.scan()) } catch { /* verified server-side */ }
+      finally { setBusy(null) }
+      await loadStatus()
+      showToast(r.verified ? `${name} fix validated against baseline & verified` : `${name} fix verification FAILED`,
+        r.verified ? 'ok' : 'err')
+      return null
+    })
+
   const meta = scan?.meta || status?.meta
   const llm = meta?.llm
   const cluster = meta?.cluster
@@ -236,10 +303,23 @@ export default function App() {
                 : aiMissingKey ? `key missing · ${llm?.provider || 'provider'} (rule-based)` : 'not configured (rule-based)'}
             </Badge>
             <Badge tone="sky">scikit-learn IsolationForest</Badge>
+            <Badge tone={selfHeal?.enabled ? 'emerald' : 'slate'}>
+              <span className={cx('h-1.5 w-1.5 rounded-full', selfHeal?.enabled ? 'bg-emerald-400 pulse-dot' : 'bg-slate-500')} />
+              self-heal: {selfHeal?.enabled ? 'ON' : 'off'}
+            </Badge>
             <Badge tone="slate">storage: sqlite</Badge>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setAutoRefresh((v) => !v)}
+            className={cx('inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition',
+              autoRefresh ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700')}
+            title="Poll status, pods and self-heal state every 5s"
+          >
+            <span className={cx('h-1.5 w-1.5 rounded-full', autoRefresh ? 'bg-emerald-400 pulse-dot' : 'bg-slate-500')} />
+            {autoRefresh ? 'Live refresh ON' : 'Live refresh'}
+          </button>
           <Button tone="ghost" onClick={handleTestAi} busy={busy === 'ai'}>🔌 Test AI</Button>
           <Button tone="danger" onClick={handleInject} busy={busy === 'inject'}>⚡ Inject Sample Drift</Button>
           <Button tone="primary" onClick={handleScan} busy={busy === 'scan'}>🔍 Scan for Drift</Button>
@@ -356,6 +436,14 @@ export default function App() {
                 <div className="flex gap-2">
                   <Button tone="ghost" onClick={() => setShowConfig((v) => !v)}>
                     {showConfig ? 'Hide' : 'Show'} full config
+                  </Button>
+                  <Button
+                    tone="ghost"
+                    busy={busy === `preview:${selectedWl.name}`}
+                    disabled={!selectedDrift?.drifted}
+                    onClick={() => handlePreviewFix(selectedWl.name)}
+                  >
+                    🪄 Preview fix
                   </Button>
                   <Button
                     tone="success"
@@ -483,6 +571,62 @@ export default function App() {
                 </>
               )}
 
+              {/* AI-assisted proposed fix (server-computed from baseline, re-validated on apply) */}
+              {preview[selectedWl.name] && (() => {
+                const p = preview[selectedWl.name]
+                return (
+                  <div className="mt-3 rounded-lg border border-violet-500/30 bg-violet-500/5 p-3">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-violet-300">
+                        🪄 Proposed fix (server-computed from baseline)
+                      </span>
+                      <Badge tone="violet">{p.diffCount} change(s)</Badge>
+                    </div>
+                    {!p.proposedChanges?.length ? (
+                      <p className="text-xs text-slate-400">No changes needed — already matches baseline.</p>
+                    ) : (
+                      <div className="overflow-hidden rounded-lg border border-slate-800">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-950/70 text-slate-400">
+                            <tr>
+                              <th className="px-3 py-1.5 font-medium">Config field</th>
+                              <th className="px-3 py-1.5 font-medium text-emerald-400">Set to (baseline)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/80">
+                            {p.proposedChanges.map((c) => (
+                              <tr key={c.path} className="bg-slate-900/40">
+                                <td className="mono px-3 py-1.5 text-slate-300">{c.path}</td>
+                                <td className="mono px-3 py-1.5 text-emerald-300">{fmt(c.value)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Button
+                        tone="success"
+                        busy={busy === `fix:${selectedWl.name}`}
+                        disabled={!p.proposedChanges?.length}
+                        onClick={() => handleApplyFix(selectedWl.name)}
+                      >
+                        ✅ Apply validated fix
+                      </Button>
+                      <button
+                        onClick={() => setPreview((prev) => ({ ...prev, [selectedWl.name]: null }))}
+                        className="text-[11px] text-slate-400 underline hover:text-slate-200"
+                      >
+                        cancel
+                      </button>
+                      <span className="text-[10px] text-slate-500">
+                        Re-validated against the baseline on apply (HTTP 422 if it doesn't reproduce it exactly).
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* fix verification result */}
               {fixResults[selectedWl.name] && (() => {
                 const r = fixResults[selectedWl.name]
@@ -574,6 +718,95 @@ export default function App() {
           </Panel>
 
           <Panel
+            title="Self-Healing"
+            subtitle={selfHeal?.enabled
+              ? `${selfHeal.mode} · auto-fixes drift every ${selfHeal.interval}s`
+              : 'auto-remediate config drift back to the approved baseline'}
+            right={
+              <Badge tone={selfHeal?.enabled ? 'emerald' : 'slate'}>
+                {selfHeal?.enabled ? 'ENABLED' : 'disabled'}
+              </Badge>
+            }
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                tone={selfHeal?.enabled ? 'danger' : 'success'}
+                busy={busy === 'selfheal'}
+                onClick={handleSelfHealToggle}
+              >
+                {selfHeal?.enabled ? '⏸ Disable' : '▶ Enable self-heal'}
+              </Button>
+              <Button tone="ghost" busy={busy === 'healnow'} onClick={handleHealNow}>🩺 Heal now</Button>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+              <MiniKV k="Passes" v={selfHeal?.passes ?? 0} />
+              <MiniKV k="Healed" v={selfHeal?.healed ?? 0} />
+              <MiniKV k="Last run" v={selfHeal?.lastRunAt ? selfHeal.lastRunAt.slice(11, 19) + 'Z' : '—'} />
+            </div>
+            <div className="mt-3">
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Healing log</div>
+              {!(selfHeal?.events || []).length ? (
+                <p className="text-xs text-slate-400">No healing actions yet. Enable self-heal (or Inject + wait) to auto-restore drift.</p>
+              ) : (
+                <ul className="max-h-52 space-y-1.5 overflow-auto">
+                  {selfHeal.events.slice(0, 10).map((e, i) => (
+                    <li key={i} className="rounded-md border border-slate-800 bg-slate-950/50 px-2 py-1.5 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <Badge tone={e.verified ? 'emerald' : 'rose'}>{e.verified ? 'HEALED' : 'FAILED'}</Badge>
+                        <span className="font-medium text-slate-200">{e.workload}</span>
+                        <span className="ml-auto text-slate-500">{e.at?.slice(11, 19)}Z</span>
+                      </div>
+                      <div className="mt-0.5 truncate text-slate-500">
+                        {e.error ? e.error : `reverted ${(e.revertedFields || []).join(', ') || '—'}`} · {e.mode}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <p className="mt-2 text-[10px] text-slate-500">
+              Only ever restores the previously approved baseline — no invented config, no arbitrary commands.
+            </p>
+          </Panel>
+
+          <Panel
+            title="Kubernetes Pods"
+            subtitle={pods[0]?.live
+              ? `live pods · restarts & recreation = k8s self-healing`
+              : 'simulated pods (no live cluster)'}
+            right={<Badge tone={pods[0]?.live ? 'emerald' : 'amber'}>{pods[0]?.live ? 'LIVE' : 'SIMULATED'}</Badge>}
+          >
+            {!pods.length ? (
+              <p className="text-sm text-slate-400">No pods found.</p>
+            ) : (
+              <ul className="max-h-64 space-y-1.5 overflow-auto">
+                {pods.map((p) => (
+                  <li key={p.name} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/50 px-2.5 py-1.5 text-[11px]">
+                    <Badge tone={p.phase === 'Running' && p.ready ? 'emerald' : 'amber'}>{p.phase}</Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-slate-200">{p.name}</div>
+                      <div className="text-slate-500">
+                        {p.app} · restarts {p.restarts}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleKillPod(p.name)}
+                      disabled={!p.live || busy === `pod:${p.name}`}
+                      title="Delete this pod — the ReplicaSet recreates it"
+                      className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-rose-300 hover:bg-rose-500/20 disabled:opacity-40"
+                    >
+                      {busy === `pod:${p.name}` ? '…' : 'kill'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-[10px] text-slate-500">
+              Killing a pod deletes one replica; Kubernetes' ReplicaSet immediately recreates it — no config change.
+            </p>
+          </Panel>
+
+          <Panel
             title="Cluster Ops"
             subtitle={clusterLive ? `Live kubectl · context '${cluster.context}'` : 'SIMULATED replicas & rollout (no live cluster)'}
           >
@@ -619,6 +852,7 @@ export default function App() {
               <li>Explanations from a real OpenAI-compatible LLM; clearly-labelled rule-based fallback on failure.</li>
               <li>Incidents in SQLite; similar past incidents matched via TF-IDF cosine.</li>
               <li>Fix patches the real Deployment back to baseline, re-reads it and re-scans to verify.</li>
+              <li>Self-healing watcher auto-detects drift and restores the baseline on an interval; k8s also heals pods natively (probes + ReplicaSet recreation).</li>
             </ol>
           </Panel>
         </div>

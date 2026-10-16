@@ -20,7 +20,10 @@ export const api = {
   status: () => req('/api/status'),
   scan: () => req('/api/scan', { method: 'POST' }),
   inject: (body = {}) => req('/api/drift/introduce', { method: 'POST', body: JSON.stringify(body) }),
-  fix: (workload) => req('/api/fix', { method: 'POST', body: JSON.stringify({ workload }) }),
+  fix: (workload, proposedChanges) =>
+    req('/api/fix', { method: 'POST', body: JSON.stringify({ workload, proposedChanges }) }),
+  fixPreview: (workload) =>
+    req('/api/fix/preview', { method: 'POST', body: JSON.stringify({ workload }) }),
   scale: (workload, replicas) =>
     req('/api/scale', { method: 'POST', body: JSON.stringify({ workload, replicas }) }),
   rollout: (workload) => req(`/api/rollout/${workload}`),
@@ -29,4 +32,10 @@ export const api = {
   llmStatus: (check = true) => req(`/api/llm/status?check=${check}`),
   llmTest: () => req('/api/llm/test', { method: 'POST' }),
   captureBaseline: () => req('/api/baseline/capture', { method: 'POST' }),
+  selfHeal: () => req('/api/selfheal'),
+  setSelfHeal: (enabled, interval) =>
+    req('/api/selfheal', { method: 'POST', body: JSON.stringify({ enabled, interval }) }),
+  selfHealRun: () => req('/api/selfheal/run', { method: 'POST' }),
+  pods: () => req('/api/pods'),
+  deletePod: (name) => req(`/api/pods/${encodeURIComponent(name)}/delete`, { method: 'POST' }),
 }
