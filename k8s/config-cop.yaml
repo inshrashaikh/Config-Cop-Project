@@ -1,0 +1,102 @@
+# Config Cop itself (backend API + React dashboard) for Minikube.
+#
+# Build images into the cluster and deploy:
+#   minikube image build -t config-cop-backend ./backend
+#   minikube image build -t config-cop-frontend ./frontend
+#   kubectl apply -f k8s/config-cop.yaml
+#   minikube service config-cop-frontend -n config-cop
+#
+# NOTE (demo scope): config fingerprinting/drift detection is simulated, so this
+# deployment runs CLUSTER_MODE=simulated. To demo REAL `kubectl scale` / rollout
+# against the demo-workloads in the `prod` namespace, run the backend locally
+# instead:  CLUSTER_MODE=real uvicorn app.main:app --port 8000   (kubectl on PATH)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: config-cop
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-cop-config
+  namespace: config-cop
+data:
+  LLM_PROVIDER: "none"          # set a provider + fill the secret below for AI explanations
+  LLM_MODEL: ""
+  LLM_BASE_URL: ""
+  CLUSTER_MODE: "simulated"     # see note above; run locally for real kubectl mode
+  SIMULATED_ROLLOUT_SECONDS: "4"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: config-cop-secrets
+  namespace: config-cop
+type: Opaque
+stringData:
+  # Leave empty to use the rule-based fallback. Never commit a real key.
+  LLM_API_KEY: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-cop-backend
+  namespace: config-cop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: config-cop-backend } }
+  template:
+    metadata: { labels: { app: config-cop-backend } }
+    spec:
+      containers:
+        - name: backend
+          image: config-cop-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: config-cop-config }
+            - secretRef: { name: config-cop-secrets }
+          volumeMounts:
+            - { name: data, mountPath: /app/data }
+          readinessProbe: { httpGet: { path: /api/health, port: 8000 }, initialDelaySeconds: 5 }
+          livenessProbe: { httpGet: { path: /api/health, port: 8000 }, initialDelaySeconds: 15 }
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: config-cop
+spec:
+  selector: { app: config-cop-backend }
+  ports: [{ port: 8000, targetPort: 8000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-cop-frontend
+  namespace: config-cop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: config-cop-frontend } }
+  template:
+    metadata: { labels: { app: config-cop-frontend } }
+    spec:
+      containers:
+        - name: frontend
+          image: config-cop-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 80 }]
+          readinessProbe: { httpGet: { path: /, port: 80 }, initialDelaySeconds: 5 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-cop-frontend
+  namespace: config-cop
+spec:
+  type: NodePort
+  selector: { app: config-cop-frontend }
+  ports: [{ port: 80, targetPort: 80, nodePort: 30080 }]

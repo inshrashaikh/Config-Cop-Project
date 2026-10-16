@@ -1,0 +1,159 @@
+{
+  "auth-service": {
+    "name": "auth-service",
+    "namespace": "prod",
+    "image": "nginx:1.25-alpine",
+    "replicas": 4,
+    "resources": {
+      "requests": {
+        "cpu": "150m",
+        "memory": "256Mi"
+      },
+      "limits": {
+        "cpu": "300m",
+        "memory": "512Mi"
+      }
+    },
+    "env": {
+      "LOG_LEVEL": "warn",
+      "TOKEN_TTL_SECONDS": "900",
+      "SESSION_SECRET_ROTATION": "enabled"
+    },
+    "probes": {
+      "liveness": {
+        "path": "/",
+        "initialDelaySeconds": 15
+      },
+      "readiness": {
+        "path": "/",
+        "initialDelaySeconds": 15
+      }
+    }
+  },
+  "checkout-api": {
+    "name": "checkout-api",
+    "namespace": "prod",
+    "image": "nginx:1.25-alpine",
+    "replicas": 3,
+    "resources": {
+      "requests": {
+        "cpu": "250m",
+        "memory": "256Mi"
+      },
+      "limits": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      }
+    },
+    "env": {
+      "LOG_LEVEL": "info",
+      "FEATURE_PAYMENTS_V2": "true",
+      "DB_POOL_SIZE": "10",
+      "TIMEOUT_MS": "2000"
+    },
+    "probes": {
+      "liveness": {
+        "path": "/",
+        "initialDelaySeconds": 10
+      },
+      "readiness": {
+        "path": "/",
+        "initialDelaySeconds": 10
+      }
+    }
+  },
+  "inventory-api": {
+    "name": "inventory-api",
+    "namespace": "prod",
+    "image": "nginx:1.25-alpine",
+    "replicas": 2,
+    "resources": {
+      "requests": {
+        "cpu": "100m",
+        "memory": "128Mi"
+      },
+      "limits": {
+        "cpu": "250m",
+        "memory": "256Mi"
+      }
+    },
+    "env": {
+      "LOG_LEVEL": "info",
+      "CACHE_TTL": "60",
+      "DB_POOL_SIZE": "6"
+    },
+    "probes": {
+      "liveness": {
+        "path": "/",
+        "initialDelaySeconds": 5
+      },
+      "readiness": {
+        "path": "/",
+        "initialDelaySeconds": 5
+      }
+    }
+  },
+  "notification-consumer": {
+    "name": "notification-consumer",
+    "namespace": "prod",
+    "image": "nginx:1.25-alpine",
+    "replicas": 3,
+    "resources": {
+      "requests": {
+        "cpu": "200m",
+        "memory": "256Mi"
+      },
+      "limits": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      }
+    },
+    "env": {
+      "LOG_LEVEL": "info",
+      "SMTP_RATE_LIMIT": "100",
+      "BATCH_SIZE": "50"
+    },
+    "probes": {
+      "liveness": {
+        "path": "/",
+        "initialDelaySeconds": 10
+      },
+      "readiness": {
+        "path": "/",
+        "initialDelaySeconds": 10
+      }
+    }
+  },
+  "payments-worker": {
+    "name": "payments-worker",
+    "namespace": "prod",
+    "image": "nginx:1.25-alpine",
+    "replicas": 2,
+    "resources": {
+      "requests": {
+        "cpu": "200m",
+        "memory": "512Mi"
+      },
+      "limits": {
+        "cpu": "400m",
+        "memory": "1Gi"
+      }
+    },
+    "env": {
+      "LOG_LEVEL": "info",
+      "QUEUE_CONCURRENCY": "8",
+      "DB_POOL_SIZE": "12",
+      "RETRY_LIMIT": "5"
+    },
+    "probes": {
+      "liveness": {
+        "path": "/",
+        "initialDelaySeconds": 10
+      },
+      "readiness": {
+        "path": "/",
+        "initialDelaySeconds": 10
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+# Config Cop demo stack: FastAPI backend + React dashboard
+services:
+  backend:
+    build: ./backend
+    container_name: config-cop-backend
+    ports:
+      # host 8001 -> container 8000 (8000 is left free for the local dev backend)
+      - "8001:8000"
+    environment:
+      # AI provider is optional. Leave LLM_PROVIDER=none for the rule-based fallback.
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      # auto | simulated | real  (real uses kubectl if a context is available)
+      CLUSTER_MODE: ${CLUSTER_MODE:-simulated}
+      SIMULATED_ROLLOUT_SECONDS: ${SIMULATED_ROLLOUT_SECONDS:-4}
+    volumes:
+      - configcop-data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: config-cop-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  configcop-data:
