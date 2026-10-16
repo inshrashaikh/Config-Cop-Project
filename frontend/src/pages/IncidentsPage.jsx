@@ -1,11 +1,29 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  History, Search, Filter, AlertTriangle, CheckCircle,
-  Clock, Shield, ArrowRight, Sparkles, RefreshCw, Layers
+  History, Search, Filter, AlertTriangle, CheckCircle2,
+  Clock, Shield, ArrowRight, Sparkles, RefreshCw, Layers,
+  AlertCircle, Check, Wrench, ExternalLink
 } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
-import { Panel, Badge, Button, EmptyState, Stat } from '../components/ui/index.jsx'
+import {
+  PageHeader, Panel, Badge, Button, EmptyState, Stat,
+  SegmentedControl
+} from '../components/ui/index.jsx'
+
+function formatRelativeTime(dateStr) {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  const diffSec = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (diffSec < 60) return `${Math.max(1, diffSec)}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHours = Math.floor(diffMin / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}d ago`
+}
 
 export default function IncidentsPage() {
   const {
@@ -21,12 +39,14 @@ export default function IncidentsPage() {
 
   const filteredIncidents = useMemo(() => {
     return incidents.filter((inc) => {
-      const matchesSearch = (inc.title || '').toLowerCase().includes(search.toLowerCase()) ||
-        (inc.explanation || '').toLowerCase().includes(search.toLowerCase()) ||
-        String(inc.id).includes(search)
+      const q = search.toLowerCase()
+      const matchesSearch =
+        (inc.title || '').toLowerCase().includes(q) ||
+        (inc.explanation || '').toLowerCase().includes(q) ||
+        (inc.workload || '').toLowerCase().includes(q) ||
+        String(inc.id).includes(q)
 
       if (!matchesSearch) return false
-
       if (statusFilter !== 'all' && inc.status !== statusFilter) return false
       return true
     })
@@ -41,177 +61,260 @@ export default function IncidentsPage() {
     }
   }, [incidents])
 
+  // Issue 4 Fix: Use inc.workload directly instead of title.split(' ')
   const handleInspectWorkload = (inc) => {
-    // Extract workload name if possible from title (e.g. "Drift detected in payment-gateway")
-    const words = inc.title.split(' ')
-    const workloadName = words[words.length - 1]
+    const workloadName = inc.workload || inc.title?.split(' ').pop()
     if (workloadName) {
       setSelectedWorkload(workloadName)
       navigate('/dashboard/drift')
     }
   }
 
+  const filterTabs = [
+    { id: 'all',      label: 'All Incidents', count: counts.total },
+    { id: 'open',     label: 'Open',          count: counts.open },
+    { id: 'resolved', label: 'Resolved',      count: counts.resolved },
+    { id: 'failed',   label: 'Failed',        count: counts.failed },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* ── Page Header ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--forest)', letterSpacing: '-0.02em' }}>
-            Incident Repository
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Historical configuration drift detections, root-cause analyses, and verified remediation audit trails in SQLite.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <PageHeader
+        title="Incident Repository"
+        subtitle="Historical configuration drift detections, root-cause analyses, and verified remediation audit trails in SQLite."
+        actions={
           <Button
             variant="secondary"
             onClick={() => loadIncidents()}
             busy={loadingIncidents}
+            icon={RefreshCw}
           >
-            <RefreshCw size={13} />
-            Refresh
+            Refresh Log
           </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* ── Summary Stats ── */}
+      {/* ── Summary Stats Grid ── */}
       <div className="stats-grid">
         <Stat
-          label="Total Recorded Incidents"
+          label="Total Incidents"
           value={counts.total.toString()}
           accent="forest"
-          hint="persisted in sqlite"
+          hint="recorded in sqlite database"
+          icon={History}
         />
         <Stat
-          label="Open Incidents"
+          label="Open Issues"
           value={counts.open.toString()}
           accent={counts.open > 0 ? 'danger' : 'success'}
-          hint="requiring attention"
+          hint="requiring attention or fix"
+          icon={AlertTriangle}
         />
         <Stat
-          label="Resolved & Verified"
+          label="Resolved &amp; Verified"
           value={counts.resolved.toString()}
           accent="success"
-          hint="restored to baseline"
+          hint="restored to canonical baseline"
+          icon={CheckCircle2}
         />
         <Stat
           label="Failed Remediations"
           value={counts.failed.toString()}
-          accent={counts.failed > 0 ? 'warning' : 'forest'}
-          hint="verification issues"
+          accent={counts.failed > 0 ? 'danger' : 'forest'}
+          hint="hash mismatch post-fix"
+          icon={AlertCircle}
         />
       </div>
 
       {/* ── Search & Filter Bar ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '12px 16px',
+        borderRadius: 'var(--radius-lg)',
+        background: 'rgba(255, 255, 255, 0.85)',
+        border: '1px solid var(--border-light)',
+        boxShadow: 'var(--elev-1)',
+      }}>
+        <div className="input-wrapper" style={{ width: 260 }}>
+          <Search size={14} className="input-icon" aria-hidden="true" />
           <input
             type="text"
-            placeholder="Search incident title, id, or text…"
+            placeholder="Search by title, explanation, or ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="input"
-            style={{ paddingLeft: 30, height: 36, width: 280, fontSize: 13 }}
+            aria-label="Search incident repository"
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 4, background: 'var(--cream)', padding: 3, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-          {[
-            { id: 'all', label: `All (${counts.total})` },
-            { id: 'open', label: `Open (${counts.open})` },
-            { id: 'resolved', label: `Resolved (${counts.resolved})` },
-            { id: 'failed', label: `Failed (${counts.failed})` },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`btn btn-sm ${statusFilter === tab.id ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ padding: '4px 10px', fontSize: 12, height: 28 }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          options={filterTabs}
+          value={statusFilter}
+          onChange={setStatusFilter}
+          name="incident-status-filter"
+        />
       </div>
 
-      {/* ── Incidents List ── */}
-      <Panel>
+      {/* ── Incidents Timeline Card List ── */}
+      <Panel
+        title={`Incident Entries (${filteredIncidents.length})`}
+        subtitle="Chronological audit trail with source provenance"
+        icon={Layers}
+      >
         {filteredIncidents.length === 0 ? (
           <EmptyState
             icon={History}
-            title="No incidents found"
-            description={search ? `No incidents match "${search}". Try adjusting your filters.` : 'No configuration drift incidents recorded yet. Inject sample drift and trigger a scan.'}
+            title="No incidents matching criteria"
+            description={
+              search
+                ? `No incidents matched "${search}".`
+                : statusFilter !== 'all'
+                ? `No incidents currently in '${statusFilter}' status.`
+                : 'No incidents recorded yet. Inject sample drift and execute a scan.'
+            }
           />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {filteredIncidents.map((inc) => (
-              <div
-                key={inc.id}
-                className="surface"
-                style={{
-                  padding: '16px 20px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(255, 255, 255, 0.85)',
-                  border: '1px solid var(--border-light)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--forest-mid)', background: 'var(--cream)', padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border-light)' }}>
-                      #{inc.id}
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--forest)' }}>
-                      {inc.title}
-                    </span>
-                    <Badge variant={inc.status === 'open' ? 'danger' : inc.status === 'resolved' ? 'success' : 'warning'} dot>
-                      {inc.status}
-                    </Badge>
-                  </div>
+            {filteredIncidents.map((inc) => {
+              const isResolved = inc.status === 'resolved'
+              const isOpen = inc.status === 'open'
+              const statusRailColor = isOpen
+                ? 'var(--danger-solid)'
+                : isResolved
+                ? 'var(--success-solid)'
+                : 'var(--warning-solid)'
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--text-tertiary)' }}>
-                    <span>Opened: {inc.created_at}</span>
-                    {inc.resolved_at && <span>· Resolved: {inc.resolved_at}</span>}
-                  </div>
-                </div>
+              return (
+                <div
+                  key={inc.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    padding: '14px 18px',
+                    borderRadius: 'var(--radius-md)',
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-light)',
+                    borderLeft: `4px solid ${statusRailColor}`,
+                    boxShadow: 'var(--elev-1)',
+                    transition: 'all var(--duration-fast) var(--ease-out-quint)',
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 'var(--text-micro)',
+                        color: 'var(--text-tertiary)',
+                        fontWeight: 700,
+                      }}>
+                        #{inc.id}
+                      </span>
+                      <h3 style={{
+                        fontSize: 'var(--text-base)',
+                        fontWeight: 700,
+                        color: 'var(--forest)',
+                      }}>
+                        {inc.title}
+                      </h3>
+                      {inc.workload && (
+                        <span style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 'var(--text-micro)',
+                          padding: '1px 6px',
+                          borderRadius: 'var(--radius-xs)',
+                          background: 'var(--cream)',
+                          border: '1px solid var(--border-light)',
+                          color: 'var(--forest)',
+                        }}>
+                          {inc.workload}
+                        </span>
+                      )}
+                    </div>
 
-                {inc.explanation && (
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    {inc.explanation}
-                  </p>
-                )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {/* Honesty Source Badge */}
+                      {inc.explain_source && (
+                        <Badge variant={inc.explain_source.startsWith('ai:') ? 'info' : 'neutral'}>
+                          {inc.explain_source.startsWith('ai:') ? 'AI' : 'Rule-based'}
+                        </Badge>
+                      )}
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderTop: '1px solid var(--border-light)', paddingTop: 10, marginTop: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                    {inc.explain_source && (
-                      <Badge variant={inc.explain_source.startsWith('ai:') ? 'info' : 'neutral'}>
-                        {inc.explain_source}
+                      <Badge variant={isOpen ? 'danger' : isResolved ? 'success' : 'warning'} dot>
+                        {inc.status?.toUpperCase()}
                       </Badge>
-                    )}
+
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleInspectWorkload(inc)}
+                        icon={ExternalLink}
+                        title={`View drift analysis for ${inc.workload || 'workload'}`}
+                      >
+                        Inspect
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Incident Explanation narrative */}
+                  {inc.explanation && (
+                    <p style={{
+                      fontSize: 'var(--text-caption)',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.55,
+                      margin: 0,
+                    }}>
+                      {inc.explanation}
+                    </p>
+                  )}
+
+                  {/* Metadata footer strip: relative time with absolute title */}
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    paddingTop: 8,
+                    borderTop: '1px solid var(--border-subtle)',
+                    fontSize: 'var(--text-micro)',
+                    color: 'var(--text-tertiary)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <span title={inc.created_at ? new Date(inc.created_at).toLocaleString() : undefined} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Clock size={12} />
+                        <span>Detected: {formatRelativeTime(inc.created_at)}</span>
+                      </span>
+
+                      {inc.resolved_at && (
+                        <span title={new Date(inc.resolved_at).toLocaleString()} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--success-text)' }}>
+                          <CheckCircle2 size={12} color="var(--success-solid)" />
+                          <span>Resolved: {formatRelativeTime(inc.resolved_at)}</span>
+                        </span>
+                      )}
+                    </div>
 
                     {inc.fix_applied && (
-                      <span style={{ color: inc.status === 'failed' ? 'var(--danger)' : 'var(--success)', fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>
-                        🔧 {inc.fix_applied}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 600 }}>Fix Applied:</span>
+                        <code style={{ fontSize: 11 }}>{inc.fix_applied}</code>
+                      </div>
                     )}
                   </div>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleInspectWorkload(inc)}
-                  >
-                    View in Drift Analysis
-                    <ArrowRight size={13} />
-                  </Button>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </Panel>

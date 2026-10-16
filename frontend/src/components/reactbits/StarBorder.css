@@ -1,8 +1,9 @@
-/* StarBorder.css */
+/* StarBorder.css — Subtler, security-grade glowing border */
 .star-border-container {
   display: inline-block;
   position: relative;
-  border-radius: inherit;
+  border-radius: var(--radius-md);
+  text-decoration: none;
 }
 
 .star-border-inner {
@@ -11,6 +12,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: inherit;
 }
 
 @property --star-border-angle {
@@ -31,28 +33,27 @@
 .star-border-gradient {
   position: absolute;
   inset: -100%;
-  animation: star-border-rotate var(--star-border-speed, 5s) linear infinite;
+  animation: star-border-rotate var(--star-border-speed, 6s) linear infinite;
   background: conic-gradient(
     from var(--star-border-angle),
     transparent 0%,
-    var(--star-border-color, #537B60) 8%,
-    transparent 16%,
+    var(--star-border-color, #2E6048) 6%,
+    transparent 14%,
     transparent 100%
   );
+  filter: blur(1.5px);
+  opacity: 0.6;
 }
 
 @keyframes star-border-rotate {
   to { --star-border-angle: 1turn; }
 }
 
-/* Light theme overrides */
-.star-border-container[data-theme="light"] .star-border-gradient {
-  opacity: 0.75;
-}
-
-/* Pause on hover */
-.star-border-container:hover .star-border-gradient {
-  animation-play-state: paused;
+/* Reduced motion: no spin */
+@media (prefers-reduced-motion: reduce) {
+  .star-border-gradient {
+    animation: none !important;
+  }
 }
 
 .star-border-surface {

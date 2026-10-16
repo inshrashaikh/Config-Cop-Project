@@ -1,10 +1,15 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Server, AlertTriangle, Cpu, History, RefreshCw,
-  Search, Shield, CheckCircle, ArrowRight, Zap, Terminal, Activity
+  Server, AlertTriangle, RefreshCw, Search, Shield,
+  ArrowRight, Zap, Activity, Clock, CheckCircle2,
+  FileText, Database, Cpu, Layers
 } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
-import { Stat, Panel, Badge, Button } from '../components/ui/index.jsx'
+import {
+  PageHeader, Stat, Panel, Badge, Button,
+  FingerprintChip, ProgressRing
+} from '../components/ui/index.jsx'
 import CallChip from '../components/reactbits/CallChip.jsx'
 import ThoughtLine from '../components/reactbits/ThoughtLine.jsx'
 
@@ -38,63 +43,107 @@ export default function OverviewPage() {
   const openIncidents = status?.incidentsOpen || []
   const outliersList = scan?.summary?.outliers || []
   const lastScanTime = scan?.summary?.scannedAt
-    ? new Date(scan.summary.scannedAt).toLocaleTimeString()
-    : 'Never'
+    ? new Date(scan.summary.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : 'Pending'
+
+  // Workload summary metrics
+  const healthStats = useMemo(() => {
+    let healthyCount = 0
+    let driftedCount = 0
+    let outlierCount = 0
+
+    workloads.forEach(w => {
+      const d = driftByName[w.name]
+      const isDrifted = d ? d.drifted : !w.matchesBaseline
+      const isOutlier = outlierByName[w.name]?.isOutlier
+
+      if (isDrifted) driftedCount++
+      else healthyCount++
+
+      if (isOutlier) outlierCount++
+    })
+
+    const total = workloads.length || 1
+    const healthyPct = Math.round((healthyCount / total) * 100)
+
+    return { healthyCount, driftedCount, outlierCount, healthyPct, total: workloads.length }
+  }, [workloads, driftByName, outlierByName])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* ── Top Header / Quick Action Bar ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--forest)', letterSpacing: '-0.02em' }}>
-            Cluster Overview
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Real-time infrastructure health, configuration drift detection, and anomaly scoring.
-          </p>
+      {/* ── Row 1: Page Header & Quick Controls ── */}
+      <PageHeader
+        title="Cluster Control Tower"
+        subtitle="Real-time Kubernetes infrastructure health, configuration drift detection, and anomaly scoring."
+        actions={
+          <>
+            <Button
+              variant="primary"
+              onClick={handleScan}
+              busy={busy === 'scan'}
+              icon={Search}
+            >
+              Scan for Drift
+            </Button>
+
+            <Button
+              variant="danger"
+              onClick={() => handleInject({})}
+              busy={busy === 'inject'}
+              icon={Zap}
+            >
+              Inject Drift
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={handleReset}
+              busy={busy === 'reset'}
+              icon={RefreshCw}
+            >
+              Reset Demo
+            </Button>
+
+            <Button
+              variant="ghost"
+              onClick={handleTestAi}
+              busy={busy === 'ai'}
+              icon={Activity}
+            >
+              Test AI
+            </Button>
+          </>
+        }
+      />
+
+      {/* ── Row 2: Consolidated Real-Time Activity Strip ── */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 10,
+        padding: '12px 16px',
+        borderRadius: 'var(--radius-lg)',
+        background: 'rgba(255, 255, 255, 0.75)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid var(--border-light)',
+        boxShadow: 'var(--elev-1)',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 'var(--text-micro)',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: 'var(--tracking-wider)',
+          color: 'var(--forest)',
+          marginRight: 6,
+        }}>
+          <Activity size={14} />
+          <span>Engine Pipeline:</span>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-          <Button
-            variant="primary"
-            onClick={handleScan}
-            busy={busy === 'scan'}
-          >
-            <Search size={14} />
-            Scan for Drift
-          </Button>
-
-          <Button
-            variant="danger"
-            onClick={() => handleInject({})}
-            busy={busy === 'inject'}
-          >
-            <Zap size={14} />
-            Inject Drift
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={handleReset}
-            busy={busy === 'reset'}
-          >
-            <RefreshCw size={14} />
-            Reset Demo
-          </Button>
-
-          <Button
-            variant="ghost"
-            onClick={handleTestAi}
-            busy={busy === 'ai'}
-          >
-            <Activity size={14} />
-            Test AI
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Real-time Operation Status via CallChips ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <CallChip
           label="Drift Scan"
           status={operations.scan.status}
@@ -132,53 +181,104 @@ export default function OverviewPage() {
         />
       )}
 
-      {/* ── Key Metrics Strip ── */}
+      {/* ── Row 3: 5-Metric Responsive Stats Strip ── */}
       <div className="stats-grid">
         <Stat
           label="Monitored Workloads"
           value={workloads.length.toString()}
           accent="forest"
           hint={`namespace: ${cluster?.namespace || 'default'}`}
+          icon={Server}
         />
         <Stat
           label="Drifted Deployments"
           value={scan ? drifted.length.toString() : '—'}
           accent={drifted.length > 0 ? 'danger' : 'success'}
-          hint={scan ? (drifted.length > 0 ? `${drifted.join(', ')}` : 'all match baseline') : 'run a scan'}
+          hint={scan ? (drifted.length > 0 ? `${drifted.join(', ')}` : 'all match baseline') : 'run scan to check'}
+          icon={AlertTriangle}
         />
         <Stat
           label="Outliers (IsolationForest)"
           value={scan ? outliersList.length.toString() : '—'}
           accent={outliersList.length > 0 ? 'warning' : 'forest'}
-          hint={scan ? (outliersList.length > 0 ? outliersList.join(', ') : 'none detected') : 'unsupervised model'}
+          hint={scan ? (outliersList.length > 0 ? outliersList.join(', ') : 'zero outliers') : 'unsupervised model'}
+          icon={Cpu}
         />
         <Stat
           label="Open Incidents"
           value={openIncidents.length.toString()}
           accent={openIncidents.length > 0 ? 'warning' : 'forest'}
-          hint="logged in sqlite"
+          hint="recorded in sqlite"
+          icon={Layers}
         />
         <Stat
-          label="Last Scan"
+          label="Last Audit Cycle"
           value={lastScanTime}
           accent="forest"
-          hint={scan ? 'automated fingerprint check' : 'pending trigger'}
+          hint={scan ? 'fingerprint comparison' : 'pending trigger'}
+          icon={Clock}
         />
       </div>
 
-      {/* ── Main Dashboard Grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
-        {/* Workload Health Card */}
+      {/* ── Row 4: Workload Health & System Provenance ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
+        {/* Workload Health Card with mini health ring */}
         <Panel
-          title="Workload Status Breakdown"
+          title="Workload Sync Status"
           subtitle="SHA-256 canonical fingerprint evaluation vs baseline"
+          icon={Server}
           right={
-            <Link to="/dashboard/workloads" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
-              View All <ArrowRight size={13} />
+            <Link
+              to="/dashboard/workloads"
+              className="btn btn-ghost btn-sm"
+              style={{ textDecoration: 'none', gap: 4 }}
+            >
+              <span>View All</span>
+              <ArrowRight size={13} />
             </Link>
           }
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Health Gauge Strip */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--cream)',
+            border: '1px solid var(--border-light)',
+            marginBottom: 14,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <ProgressRing
+                progress={healthStats.healthyPct}
+                size={38}
+                strokeWidth={4}
+                color="var(--success-solid)"
+                trackColor="var(--danger-border)"
+              />
+              <div>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--forest)' }}>
+                  {healthStats.healthyCount} of {healthStats.total} Workloads in Sync
+                </div>
+                <div style={{ fontSize: 'var(--text-micro)', color: 'var(--text-secondary)' }}>
+                  {healthStats.healthyPct}% conformity to GitOps baseline specifications
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {healthStats.driftedCount > 0 && (
+                <Badge variant="danger" dot>{healthStats.driftedCount} DRIFTED</Badge>
+              )}
+              {healthStats.outlierCount > 0 && (
+                <Badge variant="warning">{healthStats.outlierCount} OUTLIER</Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Workload Cards List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {workloads.map((w) => {
               const d = driftByName[w.name]
               const isDrifted = d ? d.drifted : !w.matchesBaseline
@@ -193,18 +293,33 @@ export default function OverviewPage() {
                     justifyContent: 'space-between',
                     padding: '10px 14px',
                     borderRadius: 'var(--radius-md)',
-                    background: isDrifted ? 'var(--danger-bg)' : 'rgba(255, 255, 255, 0.7)',
+                    background: isDrifted ? 'var(--danger-bg)' : 'rgba(255, 255, 255, 0.95)',
                     border: `1px solid ${isDrifted ? 'var(--danger-border)' : 'var(--border-light)'}`,
+                    boxShadow: 'var(--elev-1)',
+                    transition: 'all var(--duration-fast) var(--ease-out-quint)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Server size={16} color={isDrifted ? 'var(--danger)' : 'var(--forest)'} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 'var(--radius-sm)',
+                      background: isDrifted ? 'rgba(168, 34, 36, 0.12)' : 'var(--honeydew)',
+                      color: isDrifted ? 'var(--danger-solid)' : 'var(--forest)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <Server size={16} />
+                    </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--forest)' }}>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--forest)' }}>
                         {w.name}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                        fp: {w.fingerprint?.slice(0, 10)}…
+                      <div style={{ fontSize: 'var(--text-micro)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{w.namespace}</span>
+                        <span>·</span>
+                        <FingerprintChip value={w.fingerprint} length={8} />
                       </div>
                     </div>
                   </div>
@@ -218,7 +333,7 @@ export default function OverviewPage() {
                       to="/dashboard/drift"
                       onClick={() => setSelectedWorkload(w.name)}
                       className="btn btn-secondary btn-sm"
-                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      style={{ fontSize: 12, padding: '3px 9px', minHeight: 28 }}
                     >
                       Inspect
                     </Link>
@@ -230,46 +345,74 @@ export default function OverviewPage() {
         </Panel>
 
         {/* System & AI Provenance Card */}
-        <Panel title="System &amp; Verification Environment" subtitle="Engine metadata, AI model provenance, and storage">
+        <Panel
+          title="System &amp; Verification Environment"
+          subtitle="Engine metadata, AI model provenance, and storage state"
+          icon={Shield}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--cream)', border: '1px solid var(--border-light)' }}>
+            {/* Cluster card */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--cream)',
+              border: '1px solid var(--border-light)'
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--forest)' }}>Kubernetes Cluster</span>
+                <span style={{ fontSize: 'var(--text-caption)', fontWeight: 700, color: 'var(--forest)' }}>
+                  Kubernetes Cluster
+                </span>
                 <Badge variant={clusterLive ? 'success' : clusterUnavailable ? 'danger' : 'warning'} dot>
                   {clusterLive ? 'LIVE' : clusterUnavailable ? 'UNAVAILABLE' : 'SIMULATED'}
                 </Badge>
               </div>
-              <p style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: 'var(--text-caption)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                 {clusterLive
-                  ? `Connected to context: ${cluster?.context} in namespace ${cluster?.namespace}`
+                  ? `Connected to context '${cluster?.context}' in namespace '${cluster?.namespace}'`
                   : clusterUnavailable
-                  ? 'No cluster reachable. Start Minikube or configure kubeconfig.'
-                  : `Simulated engine active (${cluster?.error || 'no cluster found'}). Safe sandbox mode.`}
+                  ? 'No cluster reachable. Start Minikube or configure kubeconfig context.'
+                  : `Simulated engine active (${cluster?.error || 'no cluster found'}). Safe deterministic sandbox mode.`}
               </p>
             </div>
 
-            <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--cream)', border: '1px solid var(--border-light)' }}>
+            {/* AI Provider card */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--cream)',
+              border: '1px solid var(--border-light)'
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--forest)' }}>AI Reasoning Provider</span>
+                <span style={{ fontSize: 'var(--text-caption)', fontWeight: 700, color: 'var(--forest)' }}>
+                  AI Reasoning Provider
+                </span>
                 <Badge variant={aiConnected ? 'info' : aiErrored ? 'danger' : 'neutral'}>
                   {aiConnected ? `${llm?.provider}/${llm?.model}` : 'Rule-Based Fallback'}
                 </Badge>
               </div>
-              <p style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: 'var(--text-caption)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                 {aiConnected
                   ? `Connected to ${llm?.provider}. Explanations generated via LLM; fixes deterministically computed from baseline.`
                   : aiMissingKey
                   ? `Provider ${llm?.provider || ''} configured but API key missing. Running deterministic rule-based analysis.`
-                  : 'Operating in deterministic offline mode. No external AI dependencies needed.'}
+                  : 'Operating in deterministic offline mode. Zero external AI dependencies required.'}
               </p>
             </div>
 
-            <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--cream)', border: '1px solid var(--border-light)' }}>
+            {/* Anomaly model */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--cream)',
+              border: '1px solid var(--border-light)'
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--forest)' }}>Anomaly Model</span>
+                <span style={{ fontSize: 'var(--text-caption)', fontWeight: 700, color: 'var(--forest)' }}>
+                  Anomaly Detection Engine
+                </span>
                 <Badge variant="info">scikit-learn</Badge>
               </div>
-              <p style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: 'var(--text-caption)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                 Unsupervised IsolationForest trained on workload configuration vectors (resources, limits, replicas).
               </p>
             </div>
@@ -277,22 +420,28 @@ export default function OverviewPage() {
         </Panel>
       </div>
 
-      {/* ── Recent Incidents Strip ── */}
+      {/* ── Row 5: Recent Incidents Timeline ── */}
       <Panel
         title="Recent Configuration Incidents"
         subtitle="Historical drift detections logged to SQLite with recurring problem matches"
+        icon={Layers}
         right={
-          <Link to="/dashboard/incidents" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
-            Full Incident Log <ArrowRight size={13} />
+          <Link
+            to="/dashboard/incidents"
+            className="btn btn-ghost btn-sm"
+            style={{ textDecoration: 'none', gap: 4 }}
+          >
+            <span>Full Incident Log</span>
+            <ArrowRight size={13} />
           </Link>
         }
       >
         {incidents.length === 0 ? (
-          <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
             No recorded incidents yet. Inject sample drift and run a scan to trigger an incident.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {incidents.slice(0, 4).map((inc) => (
               <div
                 key={inc.id}
@@ -300,21 +449,23 @@ export default function OverviewPage() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '10px 14px',
+                  padding: '11px 16px',
                   borderRadius: 'var(--radius-md)',
-                  background: 'rgba(255, 255, 255, 0.7)',
+                  background: 'rgba(255, 255, 255, 0.95)',
                   border: '1px solid var(--border-light)',
+                  boxShadow: 'var(--elev-1)',
+                  gap: 12,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-tertiary)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-micro)', color: 'var(--text-tertiary)', fontWeight: 600 }}>
                     #{inc.id}
                   </span>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--forest)' }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--forest)' }}>
                       {inc.title}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: 'var(--text-micro)', color: 'var(--text-secondary)' }}>
                       {inc.created_at} {inc.resolved_at ? `→ Resolved ${inc.resolved_at}` : ''}
                     </div>
                   </div>

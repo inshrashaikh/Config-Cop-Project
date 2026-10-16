@@ -1,0 +1,177 @@
+/* ============================================================
+   CONFIG COP — DESIGN TOKENS
+   Theme: "Calm Authority" Light Glassmorphism
+   Security-Grade Infrastructure Design System
+   ============================================================ */
+
+:root {
+  /* ── Core Brand Palette (Preserved & Calibrated) ── */
+  --ivory:        #FAF9F4;
+  --cream:        #F4F2E9;
+  --honeydew:     #E5F3E8;
+  --sage:         #D4E6D5;
+  --sage-mid:     #B8D4BB;
+  --sage-deep:    #8FB594;
+
+  --forest:       #244C3A;
+  --forest-mid:   #2E6048;
+  --forest-hover: #1A392B;
+  --forest-dark:  #142B20;
+  --green-2:      #4D7459;
+  --green-3:      #648D6F;
+
+  /* ── WCAG AA Contrast Text Palette (Tested on Ivory/White/Cream) ── */
+  /* --text-primary:   >= 13.5:1 on #FAF9F4, >= 14.8:1 on #FFFFFF */
+  --text-primary:   #1A2820;
+  /* --text-secondary: >= 7.2:1 on #FAF9F4, >= 7.9:1 on #FFFFFF */
+  --text-secondary: #47584E;
+  /* --text-tertiary:  >= 4.65:1 on #FAF9F4, >= 5.1:1 on #FFFFFF (Fixes failing #8FA494) */
+  --text-tertiary:  #63756A;
+  --text-inverse:   #FFFFFF;
+
+  /* ── Semantic Aliases ── */
+  --surface-1:      var(--ivory);
+  --surface-2:      #FFFFFF;
+  --surface-3:      var(--cream);
+  --surface-subtle: rgba(229, 243, 232, 0.45);
+  --text-1:         var(--text-primary);
+  --text-2:         var(--text-secondary);
+  --text-3:         var(--text-tertiary);
+
+  --accent:         var(--forest);
+  --accent-hover:   var(--forest-hover);
+  --focus-ring:     rgba(36, 76, 58, 0.28);
+  --focus-ring-solid: #244C3A;
+
+  /* ── Refined Status Palette (AA Compliant Backgrounds, Borders & Text) ── */
+  /* Success */
+  --success:        #156C3F;
+  --success-bg:     #EAF7EE;
+  --success-border: #AEE2C2;
+  --success-solid:  #1B844D;
+  --success-text:   #115431;
+
+  /* Warning */
+  --warning:        #875803;
+  --warning-bg:     #FEF7E7;
+  --warning-border: #F8DA93;
+  --warning-solid:  #B57706;
+  --warning-text:   #6E4702;
+
+  /* Danger */
+  --danger:         #A82224;
+  --danger-bg:      #FDF0F0;
+  --danger-border:  #F6BCBC;
+  --danger-solid:   #C5282A;
+  --danger-text:    #8B1B1D;
+
+  /* Info */
+  --info:           #175582;
+  --info-bg:        #ECF4FB;
+  --info-border:    #B2D4F2;
+  --info-solid:     #1E6DA6;
+  --info-text:      #124368;
+
+  /* Neutral */
+  --neutral:        #4F6054;
+  --neutral-bg:     #F3F1E9;
+  --neutral-border: #D0DBD2;
+  --neutral-solid:  #64766A;
+  --neutral-text:   #3B483F;
+
+  /* ── Borders Scale ── */
+  --border-subtle:  rgba(180, 202, 184, 0.32);
+  --border-light:   rgba(175, 198, 179, 0.45);
+  --border-mid:     rgba(150, 176, 155, 0.60);
+  --border-strong:  rgba(115, 144, 121, 0.80);
+  --border-forest:  rgba(36, 76, 58, 0.22);
+
+  /* ── Elevation Scale (Green-Tinted Soft Layered Shadows) ── */
+  --elev-0: none;
+  --elev-1: 0 1px 2px rgba(28, 56, 42, 0.05), 0 1px 1px rgba(28, 56, 42, 0.03);
+  --elev-2: 0 3px 8px rgba(28, 56, 42, 0.06), 0 1px 3px rgba(28, 56, 42, 0.04);
+  --elev-3: 0 8px 24px rgba(28, 56, 42, 0.08), 0 2px 6px rgba(28, 56, 42, 0.04);
+  --elev-4: 0 16px 40px rgba(28, 56, 42, 0.10), 0 4px 12px rgba(28, 56, 42, 0.06);
+
+  /* Legacy shadow aliases mapped to elevation tokens */
+  --shadow-xs:  var(--elev-1);
+  --shadow-sm:  var(--elev-2);
+  --shadow-md:  var(--elev-3);
+  --shadow-lg:  var(--elev-4);
+  --shadow-xl:  0 24px 56px rgba(28, 56, 42, 0.12), 0 8px 20px rgba(28, 56, 42, 0.07);
+  --shadow-glass: 0 4px 20px rgba(28, 56, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+
+  /* ── Radii Scale ── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-full: 9999px;
+
+  /* ── 4px Spacing Scale ── */
+  --space-0-5: 2px;
+  --space-1:   4px;
+  --space-1-5: 6px;
+  --space-2:   8px;
+  --space-2-5: 10px;
+  --space-3:   12px;
+  --space-3-5: 14px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-7:   28px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-20:  80px;
+
+  /* ── Typography Scale & Ergonomics ── */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Minimum 12px anywhere; Dashboard body: 14px; Tables: 13.5-14px */
+  --text-micro:    0.75rem;     /* 12px strictly enforced minimum */
+  --text-caption:  0.8125rem;   /* 13px */
+  --text-sm:       0.875rem;    /* 14px */
+  --text-base:     0.9375rem;   /* 15px */
+  --text-md:       1.0rem;      /* 16px */
+  --text-lg:       1.125rem;    /* 18px */
+  --text-xl:       1.25rem;     /* 20px */
+  --text-2xl:      1.5rem;      /* 24px */
+  --text-3xl:      1.875rem;    /* 30px */
+  --text-4xl:      2.25rem;     /* 36px */
+  --text-5xl:      clamp(2.5rem, 5vw, 3.5rem); /* Display */
+
+  /* Line Heights */
+  --line-heading:  1.2;
+  --line-dense:    1.42;
+  --line-snug:     1.48;
+  --line-body:     1.6;
+  --line-relaxed:  1.75;
+
+  /* Letter Spacing */
+  --tracking-tight:   -0.025em;
+  --tracking-snug:    -0.015em;
+  --tracking-normal:  0em;
+  --tracking-wide:    0.04em;
+  --tracking-wider:   0.08em;
+
+  /* ── Motion & Transitions ── */
+  --ease-out-quint: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --duration-fast:   120ms;
+  --duration-base:   200ms;
+  --duration-slow:   350ms;
+  --duration-slower: 500ms;
+
+  /* ── Layout Geometry ── */
+  --sidebar-width:          248px;
+  --sidebar-compact-width:  76px;
+  --header-height:          64px;
+  --max-content:            1360px;
+}

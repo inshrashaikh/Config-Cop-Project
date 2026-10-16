@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Check, ChevronDown, Clock, AlertTriangle } from 'lucide-react'
 import './ThoughtLine.css'
 
 /**
  * ThoughtLine — Shows a collapsible progress trace for async operations.
- * Props:
- *   steps      – array of { id, text, status: 'pending'|'active'|'completed' }
- *   isComplete – when true, shows success state and collapses
- *   isError    – when true, shows error state
- *   title      – label override (default: auto)
- *   startTime  – Date when the operation started (for elapsed timer)
+ * Uses smooth CSS grid-rows animation that prevents clipping at arbitrary heights.
  */
 export default function ThoughtLine({
   steps      = [],
@@ -23,7 +19,7 @@ export default function ThoughtLine({
   /* Auto-collapse when complete */
   useEffect(() => {
     if (isComplete || isError) {
-      const t = setTimeout(() => setCollapsed(true), 1800)
+      const t = setTimeout(() => setCollapsed(true), 2400)
       return () => clearTimeout(t)
     } else {
       setCollapsed(false)
@@ -43,28 +39,39 @@ export default function ThoughtLine({
   const dotClass = isError ? 'error' : isComplete ? 'complete' : 'thinking'
 
   const defaultTitle = isError
-    ? 'Operation failed'
+    ? 'Operation encountered an issue'
     : isComplete
-    ? 'Operation complete'
-    : 'Processing…'
+    ? 'Audit completed successfully'
+    : 'Auditing workload specifications…'
 
   const activeStep = steps.find(s => s.status === 'active')
 
   return (
-    <div className="thought-line">
-      <div className="tl-header" onClick={() => setCollapsed(v => !v)}>
+    <div className="thought-line" role="region" aria-label="Progress trace">
+      <div
+        className="tl-header"
+        onClick={() => setCollapsed(v => !v)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(v => !v) } }}
+        aria-expanded={!collapsed}
+      >
         <div className="tl-left">
-          <span className={`tl-status-dot ${dotClass}`} />
+          <span className={`tl-status-dot ${dotClass}`} aria-hidden="true" />
           <span className="tl-label">
             {title ?? (activeStep?.text ?? defaultTitle)}
           </span>
         </div>
         <div className="tl-meta">
           {!isComplete && !isError && (
-            <span className="tl-clock">{elapsed}s</span>
+            <span className="tl-clock" aria-label={`${elapsed} seconds elapsed`}>{elapsed}s</span>
           )}
           {steps.length > 0 && (
-            <span className={`tl-chevron ${collapsed ? '' : 'open'}`}>▼</span>
+            <ChevronDown
+              size={14}
+              className={`tl-chevron ${collapsed ? '' : 'open'}`}
+              aria-hidden="true"
+            />
           )}
         </div>
       </div>
@@ -74,8 +81,12 @@ export default function ThoughtLine({
           <div className="tl-steps-inner">
             {steps.map((step, idx) => (
               <div key={step.id ?? idx} className={`tl-step ${step.status}`}>
-                <span className="tl-step-indicator">
-                  {step.status === 'completed' ? '✓' : step.status === 'active' ? '•' : ''}
+                <span className="tl-step-indicator" aria-hidden="true">
+                  {step.status === 'completed' ? (
+                    <Check size={11} strokeWidth={3} />
+                  ) : step.status === 'active' ? (
+                    '•'
+                  ) : null}
                 </span>
                 <span className="tl-step-text">{step.text}</span>
               </div>
@@ -86,3 +97,4 @@ export default function ThoughtLine({
     </div>
   )
 }
+

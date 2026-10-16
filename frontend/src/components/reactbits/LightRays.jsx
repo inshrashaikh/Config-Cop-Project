@@ -4,16 +4,17 @@ import './LightRays.css'
 /**
  * LightRays — canvas-based volumetric light rays for the hero section.
  * lightMode=true adapts rendering for light backgrounds.
+ * Automatically pauses when tab is hidden or element is scrolled offscreen.
  * Respects prefers-reduced-motion.
  */
 export default function LightRays({
   raysOrigin   = 'top-center',
   raysColor    = '#537B60',
-  raysSpeed    = 0.4,
+  raysSpeed    = 0.35,
   lightSpread  = 2.2,
   raysAngle    = 0,
-  noiseAmount  = 0.08,
-  saturation   = 0.85,
+  noiseAmount  = 0.06,
+  saturation   = 0.8,
   followMouse  = false,
   mouseInfluence = 0.15,
   lightMode    = true,
@@ -21,10 +22,13 @@ export default function LightRays({
   className    = '',
   style        = {},
 }) {
+  const containerRef = useRef(null)
   const canvasRef    = useRef(null)
   const rafRef       = useRef(null)
   const mouseRef     = useRef({ x: 0.5, y: 0 })
   const timeRef      = useRef(0)
+  const isVisibleRef = useRef(true)
+
   const reducedMotion = typeof window !== 'undefined'
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
     : false
@@ -44,15 +48,31 @@ export default function LightRays({
       case 'top-right':  return { x: w * 0.9,  y: 0 }
       case 'left':       return { x: 0,         y: h * 0.4 }
       case 'right':      return { x: w,          y: h * 0.4 }
-      default:           return { x: w * 0.5,   y: 0 }  /* top-center */
+      default:           return { x: w * 0.5,   y: 0 }
     }
   }, [raysOrigin])
 
   useEffect(() => {
     if (reducedMotion) return
+    const container = containerRef.current
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !container) return
     const ctx = canvas.getContext('2d')
+
+    /* IntersectionObserver: pause drawing when offscreen */
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        isVisibleRef.current = entry.isIntersecting && !document.hidden
+      },
+      { threshold: 0.05 }
+    )
+    io.observe(container)
+
+    /* VisibilityChange: pause when user switches tabs */
+    const onVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     /* Resize handler */
     const resize = () => {
@@ -72,11 +92,10 @@ export default function LightRays({
         y: (e.clientY - rect.top)  / rect.height,
       }
     }
-    canvas.parentElement?.addEventListener('mousemove', onMouseMove)
+    container.parentElement?.addEventListener('mousemove', onMouseMove)
 
     const [rr, rg, rb] = hexToRgb(raysColor)
 
-    /* Noise helpers */
     const noise = (x, y, t) => {
       return (Math.sin(x * 3.7 + t * 1.1) * Math.cos(y * 2.9 + t * 0.7) + 1) * 0.5
     }
@@ -84,7 +103,12 @@ export default function LightRays({
     let prev = performance.now()
 
     const draw = (now) => {
-      if (paused) { rafRef.current = requestAnimationFrame(draw); return }
+      if (paused || !isVisibleRef.current) {
+        prev = now
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
+
       const dt = Math.min((now - prev) / 1000, 0.1)
       prev = now
       timeRef.current += dt * raysSpeed
@@ -92,16 +116,17 @@ export default function LightRays({
       const t  = timeRef.current
       const w  = canvas.width
       const h  = canvas.height
-      if (!w || !h) { rafRef.current = requestAnimationFrame(draw); return }
+      if (!w || !h) {
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
 
       ctx.clearRect(0, 0, w, h)
 
       const origin = getOrigin(w, h)
-      /* Mouse influence shifts the origin slightly */
       const ox = origin.x + (followMouse ? (mouseRef.current.x - 0.5) * w * mouseInfluence : 0)
       const oy = origin.y + (followMouse ? (mouseRef.current.y - 0.3) * h * mouseInfluence * 0.3 : 0)
 
-      /* Ray count: 14 */
       const RAY_COUNT = 14
       const BASE_SPREAD = (Math.PI / 2) * lightSpread
 
@@ -111,26 +136,22 @@ export default function LightRays({
         const angleNoise = noise(frac, 0, t * 0.7) * 0.12 - 0.06
         const angle = baseAngle + angleNoise
 
-        /* Ray length with pulsing */
         const lenFactor = 0.9 + noise(frac, 0.5, t * 1.2) * 0.25
         const rayLen = Math.max(w, h) * 1.5 * lenFactor
 
         const ex = ox + Math.sin(angle) * rayLen
         const ey = oy + Math.cos(angle) * rayLen
 
-        /* Opacity: brighter in center, fade at edges */
         const centerFrac = 1 - Math.abs(frac - 0.5) * 2
         const opNoise = noise(frac, 1, t * 1.5) * noiseAmount
-        const opacity = (0.03 + centerFrac * 0.08 + opNoise) * saturation
+        const opacity = (0.02 + centerFrac * 0.07 + opNoise) * saturation
 
-        /* Width varies per ray */
-        const rayWidth = (10 + centerFrac * 40) * (1 + noise(frac, 2, t) * 0.4)
+        const rayWidth = (10 + centerFrac * 36) * (1 + noise(frac, 2, t) * 0.4)
 
         const grad = ctx.createLinearGradient(ox, oy, ex, ey)
         if (lightMode) {
-          /* For light backgrounds: draw semi-transparent colored beams */
-          grad.addColorStop(0, `rgba(${Math.round(rr*255)},${Math.round(rg*255)},${Math.round(rb*255)},${opacity * 1.2})`)
-          grad.addColorStop(0.5, `rgba(${Math.round(rr*255)},${Math.round(rg*255)},${Math.round(rb*255)},${opacity * 0.6})`)
+          grad.addColorStop(0, `rgba(${Math.round(rr*255)},${Math.round(rg*255)},${Math.round(rb*255)},${opacity * 1.1})`)
+          grad.addColorStop(0.5, `rgba(${Math.round(rr*255)},${Math.round(rg*255)},${Math.round(rb*255)},${opacity * 0.5})`)
           grad.addColorStop(1, `rgba(${Math.round(rr*255)},${Math.round(rg*255)},${Math.round(rb*255)},0)`)
         } else {
           grad.addColorStop(0, `rgba(${Math.round(rr*255)},${Math.round(rg*255)},${Math.round(rb*255)},${opacity * 2})`)
@@ -158,7 +179,9 @@ export default function LightRays({
     return () => {
       cancelAnimationFrame(rafRef.current)
       ro.disconnect()
-      canvas.parentElement?.removeEventListener('mousemove', onMouseMove)
+      io.disconnect()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      container.parentElement?.removeEventListener('mousemove', onMouseMove)
     }
   }, [raysColor, raysSpeed, lightSpread, raysAngle, noiseAmount, saturation,
       followMouse, mouseInfluence, lightMode, paused, getOrigin, hexToRgb, reducedMotion])
@@ -166,7 +189,7 @@ export default function LightRays({
   if (reducedMotion) return null
 
   return (
-    <div className={`light-rays-root ${className}`} style={style} aria-hidden="true">
+    <div ref={containerRef} className={`light-rays-root ${className}`} style={style} aria-hidden="true">
       <canvas ref={canvasRef} className="light-rays-canvas" />
     </div>
   )

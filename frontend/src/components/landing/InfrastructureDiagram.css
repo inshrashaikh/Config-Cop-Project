@@ -6,11 +6,11 @@
   max-width: 620px;
   margin: 0 auto;
   border-radius: var(--radius-xl);
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(184, 212, 187, 0.6);
-  box-shadow: 0 16px 40px rgba(36, 76, 58, 0.08), 0 2px 6px rgba(36, 76, 58, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--elev-3), inset 0 1px 0 rgba(255, 255, 255, 1);
   overflow: hidden;
   padding: 24px;
 }
@@ -20,16 +20,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(212, 230, 213, 0.7);
-  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 18px;
 }
 
 .infra-diagram-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--text-caption);
   font-weight: 700;
   color: var(--forest);
   letter-spacing: -0.01em;
@@ -37,12 +37,12 @@
 
 .infra-diagram-title-badge {
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--text-micro);
+  font-weight: 600;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--honeydew);
-  color: var(--forest-mid);
+  color: var(--forest);
   border: 1px solid var(--sage-mid);
 }
 
@@ -55,61 +55,61 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(184, 212, 187, 0.6);
+  background: var(--sage);
 }
 
 /* Pipeline Flow Rows */
 .infra-pipeline {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   position: relative;
 }
 
-/* Flow connector lines */
+/* Flow connector lines (Issue 6 Fix: Clean dashed border) */
 .infra-flow-connector {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   height: 20px;
   color: var(--forest-mid);
-  opacity: 0.6;
 }
 
 .infra-flow-line {
   flex: 1;
-  height: 1px;
-  background: dashed 1px var(--sage-deep);
-  border-top: 1px dashed var(--sage-deep);
+  height: 0;
+  border-top: 1.5px dashed var(--sage-deep);
+  background: transparent;
 }
 
 .infra-flow-pulse {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10px;
+  gap: 5px;
+  font-size: var(--text-micro);
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--forest);
   background: var(--cream);
-  padding: 2px 8px;
-  border-radius: 9999px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--sage-mid);
 }
 
 .infra-card {
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(212, 230, 213, 0.8);
-  box-shadow: 0 2px 8px rgba(36, 76, 58, 0.04);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--elev-1);
   padding: 14px 16px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform var(--duration-fast) var(--ease-out-quint),
+              box-shadow var(--duration-fast) var(--ease-out-quint);
 }
 
 .infra-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(36, 76, 58, 0.08);
+  box-shadow: var(--elev-2);
 }
 
 .infra-card-header {
@@ -122,17 +122,17 @@
 .infra-card-label {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: var(--text-caption);
   font-weight: 700;
   color: var(--forest);
 }
 
 .infra-card-tag {
-  font-size: 10px;
+  font-size: var(--text-micro);
   font-family: var(--font-mono);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
   background: var(--cream);
   border: 1px solid var(--sage);
   color: var(--text-secondary);
@@ -159,20 +159,20 @@
 }
 
 .infra-subcard.baseline {
-  border-left: 3px solid var(--success);
-  background: rgba(223, 250, 236, 0.15);
+  border-left: 3px solid var(--success-solid);
+  background: rgba(235, 247, 238, 0.35);
 }
 
 .infra-subcard.live-drifted {
-  border-left: 3px solid var(--danger);
-  background: rgba(253, 234, 234, 0.2);
+  border-left: 3px solid var(--danger-solid);
+  background: rgba(253, 240, 240, 0.4);
 }
 
 .infra-subcard-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--text-micro);
   font-weight: 700;
   margin-bottom: 8px;
 }
@@ -182,7 +182,7 @@
   flex-direction: column;
   gap: 5px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-micro);
 }
 
 .infra-diff-row {
@@ -190,12 +190,12 @@
   justify-content: space-between;
   align-items: center;
   padding: 3px 6px;
-  border-radius: 3px;
-  background: rgba(244, 242, 233, 0.6);
+  border-radius: var(--radius-xs);
+  background: rgba(244, 242, 233, 0.7);
 }
 
 .infra-diff-row.drift-highlight {
-  background: rgba(253, 234, 234, 0.6);
+  background: rgba(253, 240, 240, 0.85);
   border: 1px solid var(--danger-border);
 }
 
@@ -204,13 +204,13 @@
 }
 
 .infra-diff-val-ok {
-  color: var(--success);
-  font-weight: 600;
+  color: var(--success-solid);
+  font-weight: 700;
 }
 
 .infra-diff-val-err {
-  color: var(--danger);
-  font-weight: 600;
+  color: var(--danger-solid);
+  font-weight: 700;
 }
 
 /* Analysis Card */
@@ -221,42 +221,43 @@
   padding: 12px 14px;
   border-radius: var(--radius-md);
   background: #FFFFFF;
-  border: 1px solid rgba(212, 230, 213, 0.9);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--elev-1);
 }
 
 .infra-analysis-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--text-caption);
 }
 
 .infra-ai-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: 9999px;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
   background: var(--honeydew);
   color: var(--forest);
-  font-size: 10px;
+  font-size: var(--text-micro);
   font-weight: 700;
   border: 1px solid var(--sage-mid);
 }
 
 .infra-ai-text {
-  font-size: 11.5px;
-  line-height: 1.5;
+  font-size: var(--text-caption);
+  line-height: var(--line-snug);
   color: var(--text-primary);
 }
 
 .infra-diagram-footer {
-  margin-top: 16px;
+  margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid rgba(212, 230, 213, 0.7);
+  border-top: 1px solid var(--border-light);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--text-micro);
   color: var(--text-secondary);
 }

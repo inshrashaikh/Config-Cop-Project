@@ -4,51 +4,54 @@
   display: inline-flex;
   align-items: center;
   overflow: hidden;
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font-family: var(--font-sans);
+  font-size: var(--text-caption);
   font-weight: 600;
-  border: 1px solid;
+  border: 1px solid var(--border-light);
   cursor: default;
   user-select: none;
-  min-width: 160px;
-  transition: border-color 0.25s ease, color 0.25s ease;
+  min-width: 180px;
+  box-shadow: var(--elev-1);
+  transition: border-color var(--duration-base) var(--ease-out-quint),
+              color var(--duration-base) var(--ease-out-quint),
+              background-color var(--duration-base) var(--ease-out-quint);
 }
 
 /* --- Idle state --- */
 .call-chip.idle {
-  background: #FFFFFF;
-  color: #69766D;
-  border-color: #D4E6D5;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-secondary);
+  border-color: var(--border-light);
 }
 
 /* --- Running state: amber progress fill --- */
 .call-chip.running {
-  background: #FFFFFF;
-  color: #926C10;
-  border-color: #F5D87A;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--warning-text);
+  border-color: var(--warning-border);
 }
 
 /* --- Done state: green --- */
 .call-chip.done {
-  background: #DFFAEC;
-  color: #1F7A4D;
-  border-color: #A3E4BF;
+  background: var(--success-bg);
+  color: var(--success-text);
+  border-color: var(--success-border);
 }
 
 /* --- Error state: red --- */
 .call-chip.error {
-  background: #FDEAEA;
-  color: #B0292A;
-  border-color: #F3AAAA;
-  animation: chip-shake 0.45s ease-in-out;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+  animation: chip-shake 0.4s ease-in-out;
 }
 
 @keyframes chip-shake {
-  0%,100% { transform: translateX(0); }
-  20%,60% { transform: translateX(-4px); }
-  40%,80% { transform: translateX(4px); }
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
 }
 
 /* Fill wipe layer (behind content) */
@@ -57,22 +60,20 @@
   inset: 0;
   width: 0%;
   z-index: 0;
-  transition: width linear, background-color 0.3s ease;
+  transition: width linear, background-color var(--duration-base) ease;
   border-radius: inherit;
 }
 .call-chip.running .call-chip-fill {
-  background: rgba(245,216,122,0.25);
+  background: rgba(248, 218, 147, 0.35);
   width: var(--chip-fill-pct, 0%);
 }
 .call-chip.done .call-chip-fill {
-  background: rgba(163,228,191,0.4);
+  background: rgba(174, 226, 194, 0.3);
   width: 100%;
-  transition: width 0.4s ease, background-color 0.3s ease;
 }
 .call-chip.error .call-chip-fill {
-  background: rgba(243,170,170,0.4);
+  background: rgba(246, 188, 188, 0.3);
   width: 100%;
-  transition: width 0.3s ease, background-color 0.3s ease;
 }
 
 /* Content sits above fill */
@@ -85,25 +86,57 @@
   width: 100%;
 }
 
-.call-chip-icon { flex-shrink: 0; }
+.call-chip-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 
 .chip-spinner {
-  width: 12px; height: 12px;
+  width: 13px;
+  height: 13px;
   border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
-.call-chip-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.call-chip-timer { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; opacity: 0.75; font-size: 11px; white-space: nowrap; }
+.call-chip-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-chip-timer {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-micro);
+  background: rgba(255, 255, 255, 0.6);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  white-space: nowrap;
+}
 
 /* Retry button */
 .chip-retry {
-  background: none; border: none; cursor: pointer;
-  font-size: 11px; font-weight: 700; color: inherit; padding: 0 2px;
-  opacity: 0.75; transition: opacity 0.15s;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: var(--text-micro);
+  font-weight: 700;
+  color: inherit;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: opacity var(--duration-fast);
 }
-.chip-retry:hover { opacity: 1; }
+.chip-retry:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

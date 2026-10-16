@@ -1,14 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { Check, AlertCircle, RotateCw } from 'lucide-react'
 import './CallChip.css'
 
 /**
  * CallChip — Compact operation status indicator with a fill-wipe timer.
- * Props:
- *   label    – operation name string
- *   status   – 'idle' | 'running' | 'done' | 'error'
- *   duration – estimated duration in ms for fill animation (default: 8000)
- *   onRetry  – callback for retry on error state
- *   className
  */
 export default function CallChip({
   label     = 'Operation',
@@ -30,9 +25,9 @@ export default function CallChip({
       timerRef.current = setInterval(() => {
         const ms = Date.now() - startRef.current
         setElapsed(Math.floor(ms / 1000))
-        /* Cap fill at 90% until done */
-        setFillPct(Math.min(90, (ms / duration) * 100))
-      }, 200)
+        /* Cap fill at 92% until done */
+        setFillPct(Math.min(92, (ms / duration) * 100))
+      }, 150)
     } else if (status === 'done') {
       setFillPct(100)
     } else if (status === 'idle') {
@@ -58,9 +53,17 @@ export default function CallChip({
       <div className="call-chip-content">
         <span className="call-chip-icon" aria-hidden="true">
           {status === 'running' && <span className="chip-spinner" />}
-          {status === 'done'    && <span style={{ fontSize: 12, color: '#1F7A4D' }}>✓</span>}
-          {status === 'error'   && <span style={{ fontSize: 12, color: '#B0292A' }}>✕</span>}
-          {status === 'idle'    && <span style={{ fontSize: 12, color: '#8FA494' }}>◦</span>}
+          {status === 'done'    && <Check size={13} strokeWidth={2.8} color="var(--success-solid)" />}
+          {status === 'error'   && <AlertCircle size={13} strokeWidth={2.5} color="var(--danger-solid)" />}
+          {status === 'idle'    && (
+            <span style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--text-tertiary)',
+              display: 'inline-block'
+            }} />
+          )}
         </span>
 
         <span className="call-chip-label">{label}</span>
@@ -70,8 +73,9 @@ export default function CallChip({
         )}
 
         {showRetry && (
-          <button className="chip-retry" onClick={onRetry} aria-label="Retry operation">
-            ↺ retry
+          <button className="chip-retry" onClick={onRetry} aria-label={`Retry ${label}`}>
+            <RotateCw size={11} />
+            <span>Retry</span>
           </button>
         )}
       </div>
